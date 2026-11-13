@@ -1,0 +1,13 @@
+# Real anonymized student data and anything derived that embeds real exam content --
+# course rules forbid distributing this outside the class or on a public repo.
+# Lives privately instead at the Kaggle dataset ptran1203/llm-autograding-course-data.
+data/
+synth/generated/
+synth/work/
+kaggle_dataset/
+# Model outputs on real student data can quote small code snippets verbatim
+# (e.g. Task 3 feedback text) -- same privacy concern as the raw data itself.
+outputs/
+
+__pycache__/
+*.pyc

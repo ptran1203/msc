@@ -1,0 +1,87 @@
+{
+  "sample_dataset": {
+    "n_samples": 32,
+    "total_score_dist": {
+      "0": 3,
+      "1": 6,
+      "2": 3,
+      "3": 1,
+      "6": 1,
+      "7": 8,
+      "8": 1,
+      "9": 4,
+      "10": 5
+    },
+    "rubric_dist": {
+      "compilable": {
+        "0": 6,
+        "1": 26
+      },
+      "io_format": {
+        "0": 13,
+        "1": 19
+      },
+      "logic": {
+        "0": 13,
+        "1": 1,
+        "2": 9,
+        "3": 2,
+        "4": 7
+      },
+      "edge_case": {
+        "0": 13,
+        "1": 9,
+        "2": 10
+      },
+      "complexity": {
+        "0": 12,
+        "1": 20
+      },
+      "code_quality": {
+        "0": 8,
+        "1": 24
+      }
+    },
+    "taxonomy_label_freq": {
+      "Lỗi logic": 12,
+      "Lỗi biên dịch": 6,
+      "Lỗi vòng lặp": 6,
+      "Lỗi hàm": 5,
+      "Lỗi thuật toán": 4,
+      "Lỗi hard-code": 3,
+      "Lỗi style": 2,
+      "Lỗi nhập/xuất": 2,
+      "Lỗi mảng/chuỗi": 1
+    },
+    "n_labels_per_sample": {
+      "0": 4,
+      "1": 16,
+      "2": 11,
+      "3": 1
+    },
+    "feedback_level_dist": {
+      "Level 2 - Chẩn đoán": 18,
+      "Level 1 - Gợi ý nhẹ": 4,
+      "Level 3 - Gợi ý sửa": 10
+    },
+    "compile_log_nonempty_count": 0,
+    "level_leak_violations": 0
+  },
+  "public_test": {
+    "n_samples": 328,
+    "exam_breakdown": {
+      "Class03-Final-1|single_problem": 73,
+      "Class03-Midterm-1|single_problem": 58,
+      "Class03-Midterm-2|single_problem": 73,
+      "Class01-Test1|multi_problem": 31,
+      "Class01-Test2|multi_problem": 43,
+      "Class02-Test1|multi_problem": 50
+    },
+    "feedback_level_dist_requested": {
+      "Level 2 - Chẩn đoán": 163,
+      "Level 3 - Gợi ý sửa": 50,
+      "Level 1 - Gợi ý nhẹ": 115
+    },
+    "compile_log_nonempty_count": 0
+  }
+}
