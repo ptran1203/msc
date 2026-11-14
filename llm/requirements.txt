@@ -1,0 +1,7 @@
+transformers>=4.57
+accelerate>=1.14
+bitsandbytes>=0.50
+peft>=0.17
+sentence-transformers>=5.6
+tqdm
+numpy
