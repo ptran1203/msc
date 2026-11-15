@@ -193,5 +193,9 @@ def task3_prompt(ds: Dataset, sample: dict, fewshot_ds: Dataset | None = None, f
 {level_desc}
 
 Hãy viết phản hồi tiếng Việt cho sinh viên, ĐÚNG mức độ yêu cầu ở trên (không vượt mức cho phép).
+QUAN TRỌNG: phản hồi phải NGẮN GỌN đúng phong cách giáo viên thực tế — thường chỉ 1 câu, hoặc vài
+vế ngắn nối bằng dấu ';' (ví dụ: "Tốt.", "P1 đúng; P2 sai công thức, em xem lại."). KHÔNG viết
+đoạn văn dài, KHÔNG giải thích nhiều bước, KHÔNG lặp lại đề bài.
+BẮT BUỘC viết TOÀN BỘ bằng tiếng Việt — KHÔNG chèn tiếng Trung, tiếng Anh hay ngôn ngữ khác vào phản hồi.
 {output_instruction}
 """

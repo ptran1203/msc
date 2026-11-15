@@ -106,6 +106,30 @@ The first public run (328 samples × 3 tasks) hit exactly one parse failure, on 
 ### Submission rejected: `total_score` must exactly equal the rubric sum
 The course's actual grader rejected `predictions_task1_public.json` outright (error on `Class01-Test1-S10`: `'total' (2) does not match the sum of the six dimensions (3.0)`). Checked and confirmed: in all 32 `sample_dataset` gold labels, `total_score` is *always* exactly `sum(rubric.values())` — it's not an independent holistic judgment, just the sum. The model, however, frequently computed `total_score` independently of its own rubric breakdown: **179/328 (55%) of Task 1 predictions were inconsistent**. Fixed in two places: `run_prompting.py` now overrides `total_score = sum(rubric.values())` unconditionally after parsing (never trusts the model's own total), and `validate_submission.py` now checks this invariant so it's caught locally before ever touching the leaderboard again. Already-generated files were patched in place (pure JSON edit, no model rerun needed).
 
+## 4b. Classical ML baseline for Task 2 (comparison only, NOT one of the 2 required approaches)
+
+The course rules require >=1 prompting-LLM approach and >=1 fine-tuned open-weight LLM as the graded deliverables ("đồ án phải thể hiện được năng lực làm việc với LLM"). This is an *additional* comparison point for the report's ablation/error-analysis section, not a substitute for either.
+
+`src/ml_baseline_task2.py`: code embeddings via `sentence-transformers` (`all-MiniLM-L6-v2`, CPU) + `OneVsRestClassifier(LogisticRegression)`, trained on the same 89-sample pool (32 real + 57 synthetic) used for RAG. 5-fold out-of-fold CV, seed=42.
+
+| Approach | macro-F1 | micro-F1 |
+|---|---|---|
+| Classical ML baseline (5-fold CV) | **0.303** | 0.314 |
+| LLM zero-shot (sample_dataset) | 0.183 | 0.286 |
+| LLM zero-shot (public leaderboard, 328 real samples) | 0.1236 | — |
+
+Reading: the simple embedding+LogReg baseline beats the LLM zero-shot prompting approach on this task, by a real margin. `Lỗi edge case` scored 0.0 (expected -- only 1 positive example exists across the whole 89-sample pool, so most CV folds never see it in training). This is a genuinely useful finding for the report: it suggests Task 2's zero-shot LLM approach needs real improvement (few-shot/fine-tuning) to justify itself over a trivial baseline, and should be discussed honestly rather than omitted.
+
+**Leaderboard result: 0.1525** -- real but much smaller gap over LLM zero-shot (0.1236) than the 5-fold CV (0.303) suggested. Large CV-to-leaderboard gap, likely because the 328-sample public test spans 6 exams while the 89-sample training pool only has real coverage of 2 (EX01/EX02) plus synthetic coverage of the 3 single-problem types -- the 3 `multi_problem` public exams (Class01-Test1/2, Class02-Test1) are represented by only EX01's 15 real examples, so the classifier likely doesn't generalize to their actual code style/content.
+
+## 4c. Task 3 fix: style/brevity mismatch (2026-11-15)
+
+Task 3's zero-shot public submission scored 0.1005 on the leaderboard (#19/19) despite the rule-based level-compliance checker reporting 1.0 compliance -- compliance was never the problem. Added `eval.py:task3_overlap_proxy` (crude token-overlap F1 against gold feedback -- not the official metric, since no official diagnostic-accuracy-vs-teacher implementation exists, but the first local signal for this half of Task 3's grading criteria) to check: zero-shot scored only **0.136** overlap. Gold feedback is almost always terse (`"Tốt."`, `"P1 đúng; P2 sai công thức, em xem lại."`) while zero-shot output was multi-sentence essay-style explanation -- a real content mismatch independent of compliance.
+
+Fix: added an explicit brevity instruction to `task3_prompt` + enabled the already-built (but never exercised) static few-shot for Task 3. Result: overlap proxy **0.136 -> 0.258** (90% relative gain), compliance still 1.0.
+
+**Side issue found and fixed**: ~6-9% of samples (2-3/32) had the model mix Chinese characters into otherwise-Vietnamese feedback (e.g. "硬编码在代码中，应改为参数filename") -- a real, recurring failure mode, not a fluke. An explicit "Vietnamese only" instruction cut it from 3/32 to 2/32 but didn't eliminate it; a sampled retry (seeded, temperature=0.7 -- greedy retry deterministically repeated the same failure) still missed 1-2 stubborn cases. Added a deterministic last-resort cleanup in `run_prompting.py` (`_CJK_RE`, covering Han ideographs + CJK/fullwidth punctuation) that strips any surviving CJK characters before writing the final prediction -- guarantees no CJK ever ships, even though prompt-level fixes alone couldn't fully prevent the model from generating it.
+
 ## 5. Submission pipeline
 
 `src/run_prompting.py` generates `predictions.json` per task; `src/validate_submission.py` checks schema/value-range/sample-id-coverage before anything would be submitted externally (no official checker script was provided in this data drop, so this is our own reconstruction of the schema). First real submission files for `public_test_release` (328 samples) generated via `python run_prompting.py --split public --tasks 1,2,3`.

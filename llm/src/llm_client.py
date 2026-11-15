@@ -26,20 +26,25 @@ class LocalLLM:
         )
         self.model.eval()
 
-    def generate(self, system: str, user: str, max_new_tokens: int = 512) -> str:
+    def generate(self, system: str, user: str, max_new_tokens: int = 512, temperature: float | None = None, seed: int | None = None) -> str:
+        """temperature=None -> deterministic greedy (the default, reproducible on its own).
+        temperature set -> sampling, seeded explicitly so it's still reproducible; used for
+        a retry attempt when greedy decoding deterministically repeats a failure mode."""
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
         text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = self.tokenizer(text, return_tensors="pt").to(self.model.device)
+        if temperature is not None:
+            torch.manual_seed(seed if seed is not None else SEED)
         with torch.no_grad():
             out = self.model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
-                do_sample=False,
-                temperature=None,
-                top_p=None,
+                do_sample=temperature is not None,
+                temperature=temperature,
+                top_p=0.9 if temperature is not None else None,
                 pad_token_id=self.tokenizer.eos_token_id,
             )
         new_tokens = out[0][inputs["input_ids"].shape[1]:]

@@ -46,24 +46,23 @@ print("data staged OK")
 ))
 
 cells.append(new_markdown_cell(
-"""## Config -- edit this, then run the cell below
+"""## Run -- generates the public submission (328 samples, all 3 tasks, static few-shot)
 
-- `SPLIT`: `"sample"` (32 labeled, validates against gold) or `"public"` (328 unlabeled, the real submission target)
-- `TASKS`: comma-separated task numbers, e.g. `"1,2"`
-- `MODE`: `"zeroshot"`, `"fewshot"` (static hand-picked exemplars), or `"rag"` (retrieval from the 89-sample pool)"""
-))
-
-cells.append(new_code_cell(
-"""SPLIT = "sample"
-TASKS = "1,2"
-MODE = "rag"
-"""
+To try a different config, just edit the command line directly:
+`--split sample|public`, `--tasks 1,2,3`, `--fewshot` / `--rag` / neither (zero-shot)."""
 ))
 
 cells.append(new_code_cell(
 """%cd /kaggle/working/msc/llm/src
-mode_flag = {"zeroshot": "", "fewshot": "--fewshot", "rag": "--rag"}[MODE]
-!python -u run_prompting.py --split {SPLIT} --tasks {TASKS} {mode_flag}
+!python -u run_prompting.py --split public --tasks 1,2,3 --fewshot
+"""
+))
+
+cells.append(new_code_cell(
+"""import glob, re
+for path in sorted(glob.glob("../outputs/predictions_task*_public_*.json")):
+    task_num = re.search(r"predictions_task(\\d)_", path).group(1)
+    get_ipython().system(f"python validate_submission.py {task_num} {path} --split public")
 """
 ))
 
@@ -71,7 +70,9 @@ cells.append(new_markdown_cell(
 """## Output
 
 Predictions and logs are written to `/kaggle/working/msc/llm/outputs/` -- anything under
-`/kaggle/working` is saved as this notebook's output automatically on commit."""
+`/kaggle/working` is saved as this notebook's output automatically on commit. The cell
+above validates each generated `predictions_task*.json` against the schema before you
+trust it as submission-ready."""
 ))
 
 nb = new_notebook(cells=cells)

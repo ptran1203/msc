@@ -106,3 +106,26 @@ def task3_compliance(pred_samples_with_level):
     n = len(pred_samples_with_level)
     violations = [sid for sid, level, fb in pred_samples_with_level if not level_compliant(level, fb)]
     return {"n": n, "compliance_rate": 1 - len(violations) / n if n else 1.0, "violations": violations}
+
+
+def _tokenize_vi(text: str) -> set:
+    return set(re.findall(r"\w+", text.lower(), re.UNICODE))
+
+
+def feedback_overlap_f1(pred: str, gold: str) -> float:
+    """Crude ROUGE-1-like token-overlap F1. Not the official metric (no official
+    diagnostic-accuracy-vs-teacher implementation exists -- see METHOD.md), just a local
+    proxy so Task 3 changes aren't evaluated on level-compliance alone."""
+    p_tokens, g_tokens = _tokenize_vi(pred), _tokenize_vi(gold)
+    if not p_tokens or not g_tokens:
+        return 0.0
+    overlap = len(p_tokens & g_tokens)
+    precision = overlap / len(p_tokens)
+    recall = overlap / len(g_tokens)
+    return 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+
+
+def task3_overlap_proxy(pred_samples_with_gold):
+    """pred_samples_with_gold: list of (sample_id, pred_feedback, gold_feedback)."""
+    scores = [feedback_overlap_f1(pred, gold) for _, pred, gold in pred_samples_with_gold]
+    return {"n": len(scores), "mean_overlap_f1": sum(scores) / len(scores) if scores else 0.0}

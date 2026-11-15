@@ -6,17 +6,19 @@ Usage:
 """
 import argparse
 import json
+import re
 from pathlib import Path
 
 from tqdm import tqdm
 
 from data import REPO_ROOT, load_public_test, load_sample_dataset, read_code
-from eval import task1_metrics, task2_metrics, task3_compliance
+from eval import task1_metrics, task2_metrics, task3_compliance, task3_overlap_proxy
 from llm_client import LocalLLM, MODEL_NAME, SEED, extract_json
 from prompts import SYSTEM_GRADER, task1_prompt, task2_prompt, task3_prompt
 from rag import RagIndex
 
 OUTPUT_DIR = REPO_ROOT / "outputs"
+_CJK_RE = re.compile(r"[一-鿿　-〿＀-￯]")  # Han ideographs + CJK/fullwidth punctuation
 
 
 RUBRIC_DEFAULT = {d: 0 for d in ["compilable", "io_format", "logic", "edge_case", "complexity", "code_quality"]}
@@ -46,6 +48,7 @@ def run_task(llm, ds, task_num, log_path, fewshot_ds=None, rag_index=None, rag_k
     predictions = []
     n_parse_fail = 0
     n_patched = 0
+    n_cjk_retried = 0
     with open(log_path, "w", encoding="utf-8") as logf:
         bar = tqdm(samples, desc=f"task{task_num}", unit="sample")
         for sample in bar:
@@ -66,6 +69,24 @@ def run_task(llm, ds, task_num, log_path, fewshot_ds=None, rag_index=None, rag_k
                     n_patched += 1
                     for key in missing:
                         parsed[key] = defaults[key]
+            # Task 3 occasionally mixes in Chinese characters despite the Vietnamese-only
+            # instruction (observed ~6-9% of samples) -- retry once with an emphatic reminder.
+            if task_num == 3 and parsed.get("feedback") and _CJK_RE.search(parsed["feedback"]):
+                # Greedy decoding deterministically repeats this failure mode on the same
+                # prompt even with an added reminder -- sample instead (seeded, reproducible)
+                # to actually escape it.
+                retry_prompt = prompt + "\n\n[Lưu ý: lần trước bạn lẫn ký tự KHÔNG phải tiếng Việt vào phản hồi. Viết lại HOÀN TOÀN bằng tiếng Việt, không chèn tiếng Trung/Anh.]"
+                retry_raw = llm.generate(SYSTEM_GRADER, retry_prompt, max_new_tokens=500, temperature=0.7)
+                retry_parsed = extract_json(retry_raw)
+                if retry_parsed and retry_parsed.get("feedback") and not _CJK_RE.search(retry_parsed["feedback"]):
+                    parsed = retry_parsed
+                    raw = retry_raw
+                    n_cjk_retried += 1
+                else:
+                    # Last resort: the sampled retry hit the same failure mode (observed on
+                    # a couple of stubborn samples) -- strip CJK chars rather than ship them.
+                    parsed["feedback"] = _CJK_RE.sub(" ", parsed["feedback"])
+                    parsed["feedback"] = re.sub(r"\s{2,}", " ", parsed["feedback"]).strip()
             if task_num == 1 and "rubric" in parsed:
                 # total_score is NOT an independent judgment -- it must equal the rubric sum,
                 # confirmed as a hard invariant in gold labels and enforced by the grader.
@@ -73,7 +94,7 @@ def run_task(llm, ds, task_num, log_path, fewshot_ds=None, rag_index=None, rag_k
             predictions.append({"sample_id": sample["sample_id"], "output": parsed})
             logf.write(json.dumps({"sample_id": sample["sample_id"], "raw": raw}, ensure_ascii=False) + "\n")
             logf.flush()
-            bar.set_postfix(parse_fail=n_parse_fail, patched=n_patched)
+            bar.set_postfix(parse_fail=n_parse_fail, patched=n_patched, cjk_retried=n_cjk_retried)
     return predictions, n_parse_fail
 
 
@@ -158,6 +179,10 @@ def main():
                 triples = [(p["sample_id"], level_by_id[p["sample_id"]], p["output"]["feedback"]) for p in predictions]
                 m = task3_compliance(triples)
                 print("  level compliance:", m["compliance_rate"], "violations:", m["violations"])
+                gold_fb_by_id = {s["sample_id"]: s["output"]["feedback"] for s in gold}
+                overlap_triples = [(p["sample_id"], p["output"]["feedback"], gold_fb_by_id[p["sample_id"]]) for p in predictions]
+                mo = task3_overlap_proxy(overlap_triples)
+                print("  feedback overlap proxy (not the official metric):", mo["mean_overlap_f1"])
 
 
 if __name__ == "__main__":
