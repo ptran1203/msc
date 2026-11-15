@@ -4,7 +4,9 @@ import nbformat as nbf
 from nbformat.v4 import new_code_cell, new_markdown_cell, new_notebook
 
 REPO_URL = "https://github.com/ptran1203/msc.git"
+KAGGLE_USERNAME = "ptran1203"
 DATASET_SLUG = "llm-autograding-course-data"
+DATASET_MOUNT = f"/kaggle/input/datasets/{KAGGLE_USERNAME}/{DATASET_SLUG}"
 
 cells = []
 
@@ -36,7 +38,7 @@ f"""%cd /kaggle/working
 
 cells.append(new_code_cell(
 f"""import shutil, pathlib
-dataset_root = pathlib.Path("/kaggle/input/{DATASET_SLUG}")
+dataset_root = pathlib.Path("{DATASET_MOUNT}")
 repo_llm = pathlib.Path("/kaggle/working/msc/llm")
 shutil.copytree(dataset_root / "data", repo_llm / "data")
 (repo_llm / "synth").mkdir(exist_ok=True)
@@ -75,7 +77,14 @@ above validates each generated `predictions_task*.json` against the schema befor
 trust it as submission-ready."""
 ))
 
-nb = new_notebook(cells=cells)
+# Kaggle's papermill execution engine requires kernelspec metadata to even start --
+# without it, the kernel fails immediately with "No kernel name found in notebook"
+# before any cell runs (found this the hard way on the sibling synth-data notebook).
+KERNELSPEC_METADATA = {
+    "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+    "language_info": {"name": "python", "version": "3"},
+}
+nb = new_notebook(cells=cells, metadata=KERNELSPEC_METADATA)
 with open("../kaggle_kernel/kaggle_runner.ipynb", "w", encoding="utf-8") as f:
     nbf.write(nb, f)
 print("wrote kaggle_kernel/kaggle_runner.ipynb")

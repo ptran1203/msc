@@ -5,7 +5,9 @@ import nbformat as nbf
 from nbformat.v4 import new_code_cell, new_markdown_cell, new_notebook
 
 REPO_URL = "https://github.com/ptran1203/msc.git"
+KAGGLE_USERNAME = "ptran1203"
 DATASET_SLUG = "llm-autograding-course-data"
+DATASET_MOUNT = f"/kaggle/input/datasets/{KAGGLE_USERNAME}/{DATASET_SLUG}"
 
 cells = []
 
@@ -39,7 +41,7 @@ f"""%cd /kaggle/working
 
 cells.append(new_code_cell(
 f"""import shutil, pathlib
-dataset_root = pathlib.Path("/kaggle/input/{DATASET_SLUG}")
+dataset_root = pathlib.Path("{DATASET_MOUNT}")
 repo_llm = pathlib.Path("/kaggle/working/msc/llm")
 shutil.copytree(dataset_root / "data", repo_llm / "data")
 print("data staged OK")
@@ -87,7 +89,14 @@ the course rules it should go back into the private Kaggle dataset
 don't just leave it only as a kernel output.""".format(slug=DATASET_SLUG)
 ))
 
-nb = new_notebook(cells=cells)
+# Kaggle's papermill execution engine requires kernelspec metadata to even start --
+# without it the kernel fails immediately with "No kernel name found in notebook"
+# before any cell runs (this is exactly what happened on the first push of this notebook).
+KERNELSPEC_METADATA = {
+    "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+    "language_info": {"name": "python", "version": "3"},
+}
+nb = new_notebook(cells=cells, metadata=KERNELSPEC_METADATA)
 with open("../kaggle_kernel_synth/synth_data_runner.ipynb", "w", encoding="utf-8") as f:
     nbf.write(nb, f)
 print("wrote kaggle_kernel_synth/synth_data_runner.ipynb")
