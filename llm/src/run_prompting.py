@@ -127,6 +127,8 @@ def main():
     ap.add_argument("--rag-k", type=int, default=2, help="exemplars to retrieve per sample (keep small -- see VRAM cliff note in llm/CLAUDE.md)")
     ap.add_argument("--model", default=MODEL_NAME, help="HF model id or local path -- try a different model/checkpoint")
     ap.add_argument("--run-tag", default=None, help="override the auto-derived tag in output filenames (default: <model>[_fewshot|_rag])")
+    ap.add_argument("--num-shards", type=int, default=1, help="split each task's samples into this many disjoint shards -- for running one shard per GPU in parallel (see merge_shards.py)")
+    ap.add_argument("--shard-id", type=int, default=0, help="which shard (0-indexed) this process handles; pair with CUDA_VISIBLE_DEVICES to pin it to one GPU")
     args = ap.parse_args()
     task_nums = [int(t) for t in args.tasks.split(",")]
 
@@ -134,11 +136,15 @@ def main():
     if args.limit:
         for t in ds.tasks:
             ds.tasks[t] = ds.tasks[t][: args.limit]
+    if args.num_shards > 1:
+        for t in ds.tasks:
+            ds.tasks[t] = ds.tasks[t][args.shard_id :: args.num_shards]
     fewshot_ds = load_sample_dataset() if (args.fewshot or args.rag) else None
 
     method_suffix = "_rag" if args.rag else ("_fewshot" if args.fewshot else "")
     method_tag = args.run_tag or short_model_name(args.model) + method_suffix
-    tag = f"{args.split}_{method_tag}"
+    shard_suffix = f"_shard{args.shard_id}of{args.num_shards}" if args.num_shards > 1 else ""
+    tag = f"{args.split}_{method_tag}{shard_suffix}"
 
     OUTPUT_DIR.mkdir(exist_ok=True)
     print(f"Loading {args.model} (seed={SEED}, fewshot={args.fewshot}, run_tag={method_tag})...")

@@ -10,6 +10,6 @@
   "enable_internet": "true",
   "dataset_sources": ["ptran1203/llm-autograding-course-data"],
   "competition_sources": [],
-  "kernel_sources": [],
+  "kernel_sources": ["ptran1203/llm-synth-data-generator"],
   "model_sources": []
 }
