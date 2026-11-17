@@ -53,11 +53,13 @@ print("data staged OK")
 ))
 
 cells.append(new_markdown_cell(
-"""## Run -- generates the public submission (328 samples, all 3 tasks, RAG few-shot)
+"""## Run -- generates the public submission (328 samples, all 3 tasks, static few-shot)
 
-`--rag` retrieves exemplars from the real + synthetic sample pool (`rag.py`), so this is
-what actually makes use of the synthetic data staged above -- `--fewshot` would use only
-the static real exemplars and ignore it.
+**Not using `--rag`**: tried it, and it anchored Task 2 hard toward single-label outputs
+(every synthetic exemplar has exactly one injected bug, which biased the model into mostly
+single-label predictions even on genuinely multi-label real submissions -- macro-F1 dropped
+3x vs. zero-shot on the leaderboard). `--fewshot` uses only the static hand-picked real
+exemplars, same as the best-scoring runs so far.
 
 Runs across **both GPUs in parallel** (`--num-shards 2`, one process per GPU via
 `CUDA_VISIBLE_DEVICES`, merged back together by `merge_shards.py`) -- the model is small
@@ -75,10 +77,10 @@ cells.append(new_code_cell(
 """%cd /kaggle/working/msc/llm/src
 import os, subprocess
 
-RUN_TAG = "qwen-rag"
+RUN_TAG = "qwen-fewshot"
 cmd = lambda shard: [
     "python", "-u", "run_prompting.py", "--split", "public", "--tasks", "1,2,3",
-    "--rag", "--run-tag", RUN_TAG, "--num-shards", "2", "--shard-id", str(shard),
+    "--fewshot", "--run-tag", RUN_TAG, "--num-shards", "2", "--shard-id", str(shard),
 ]
 envs = [{**os.environ, "CUDA_VISIBLE_DEVICES": str(i)} for i in range(2)]
 procs = [subprocess.Popen(cmd(i), env=envs[i]) for i in range(2)]
