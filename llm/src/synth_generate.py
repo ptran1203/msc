@@ -86,7 +86,11 @@ def generate(limit_bugs: int | None = None, variants: int = VARIANTS_PER_BUG):
                 sample_id = f"{syn_exam_id}-{bug_id}-{v}"
                 t0 = time.time()
                 prompt = mutation_prompt(problem, ref_code, bug_id, v)
-                raw = llm.generate(SYSTEM_MUTATOR, prompt, max_new_tokens=800)
+                # v==0 stays deterministic (greedy); later variants are seeded samples so
+                # "a different way to do this" actually diverges instead of repeating the
+                # same greedy completion with a different hint sentence attached.
+                temperature = None if v == 0 else 0.8
+                raw = llm.generate(SYSTEM_MUTATOR, prompt, max_new_tokens=800, temperature=temperature, seed=v)
                 code = extract_code_block(raw)
                 if code is None:
                     print(f"  SKIP {sample_id}: no code block extracted ({time.time()-t0:.1f}s)")
