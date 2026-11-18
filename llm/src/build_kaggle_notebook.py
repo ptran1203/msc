@@ -8,7 +8,7 @@ KAGGLE_USERNAME = "ptran1203"
 DATASET_SLUG = "llm-autograding-course-data"
 DATASET_MOUNT = f"/kaggle/input/datasets/{KAGGLE_USERNAME}/{DATASET_SLUG}"
 SYNTH_KERNEL_SLUG = "llm-synth-data-generator"
-SYNTH_MOUNT = f"/kaggle/input/notebooks/{KAGGLE_USERNAME}/{SYNTH_KERNEL_SLUG}/msc/llm/synth/generated"
+SYNTH_MOUNT = f"/kaggle/input/notebooks/{KAGGLE_USERNAME}/{SYNTH_KERNEL_SLUG}/synth_generated"
 
 cells = []
 
@@ -103,12 +103,32 @@ for path in sorted(glob.glob("../outputs/predictions_task*_public_*.json")):
 ))
 
 cells.append(new_markdown_cell(
+"""## Collect submission + clean up
+
+Copies just the 3 final (validated) predictions files into `/kaggle/working/submission/`
+under plain names, then deletes the cloned repo -- so the notebook's saved output is only
+that one folder instead of the whole source tree + per-shard intermediates."""
+))
+
+cells.append(new_code_cell(
+f"""import shutil, pathlib
+sub_dir = pathlib.Path("/kaggle/working/submission")
+sub_dir.mkdir(exist_ok=True)
+for t in (1, 2, 3):
+    src = pathlib.Path(f"/kaggle/working/msc/llm/outputs/predictions_task{{t}}_public_{{RUN_TAG}}.json")
+    if src.exists():
+        shutil.copy(src, sub_dir / f"predictions_task{{t}}.json")
+%cd /kaggle/working
+shutil.rmtree("/kaggle/working/msc", ignore_errors=True)
+print("submission files:", sorted(p.name for p in sub_dir.iterdir()))
+"""
+))
+
+cells.append(new_markdown_cell(
 """## Output
 
-Predictions and logs are written to `/kaggle/working/msc/llm/outputs/` -- anything under
-`/kaggle/working` is saved as this notebook's output automatically on commit. The cell
-above validates each generated `predictions_task*.json` against the schema before you
-trust it as submission-ready."""
+`/kaggle/working/submission/predictions_task{1,2,3}.json` -- pick these up directly,
+already validated against the schema in the cell above."""
 ))
 
 # Kaggle's papermill execution engine requires kernelspec metadata to even start --

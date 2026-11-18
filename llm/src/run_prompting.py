@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from data import REPO_ROOT, load_public_test, load_sample_dataset, read_code
 from eval import task1_metrics, task2_metrics, task3_compliance, task3_overlap_proxy
+from compile_check import attach_real_compile_log
 from llm_client import LocalLLM, MODEL_NAME, SEED, extract_json
 from prompts import SYSTEM_GRADER, task1_prompt, task2_prompt, task3_prompt
 from rag import RagIndex
@@ -140,6 +141,16 @@ def main():
         for t in ds.tasks:
             ds.tasks[t] = ds.tasks[t][args.shard_id :: args.num_shards]
     fewshot_ds = load_sample_dataset() if (args.fewshot or args.rag) else None
+
+    # The released data always leaves compile_log empty, forcing the model to guess
+    # compilability purely by reading code -- measured to be wrong ~20-25% of the time
+    # even on code that compiles fine (see METHOD.md). Fill in the real signal via our
+    # own g++ compile instead, same oracle principle as the synthetic-data pipeline.
+    print("computing real compile_log (g++, cached)...")
+    for t in task_nums:
+        attach_real_compile_log(ds, t)
+        if fewshot_ds is not None:
+            attach_real_compile_log(fewshot_ds, t)
 
     method_suffix = "_rag" if args.rag else ("_fewshot" if args.fewshot else "")
     method_tag = args.run_tag or short_model_name(args.model) + method_suffix

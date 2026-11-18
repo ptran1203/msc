@@ -78,10 +78,28 @@ cells.append(new_code_cell(
 ))
 
 cells.append(new_markdown_cell(
+"""## Collect output + clean up
+
+Copies just the generated data out of the repo clone into `/kaggle/working/synth_generated/`,
+then deletes the repo -- so the notebook's saved output is only the synthetic data, not the
+whole source tree + per-candidate submission files."""
+))
+
+cells.append(new_code_cell(
+"""import shutil
+shutil.rmtree("/kaggle/working/synth_generated", ignore_errors=True)
+shutil.copytree("/kaggle/working/msc/llm/synth/generated", "/kaggle/working/synth_generated")
+%cd /kaggle/working
+shutil.rmtree("/kaggle/working/msc", ignore_errors=True)
+print("kept files:", len(list(__import__("pathlib").Path("/kaggle/working/synth_generated").rglob("*"))))
+"""
+))
+
+cells.append(new_markdown_cell(
 """## Output
 
-Written to `/kaggle/working/msc/llm/synth/generated/` (schema-compatible with `sample_dataset`,
-loadable via `data.load_dataset()`) -- saved as this notebook's output automatically on commit.
+`/kaggle/working/synth_generated/` (schema-compatible with `sample_dataset`, loadable via
+`data.load_dataset()`).
 
 **Before using this data elsewhere**: it embeds real exam statements (course content), so per
 the course rules it should go back into the private Kaggle dataset
