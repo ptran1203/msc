@@ -67,13 +67,18 @@ cells.append(new_code_cell(
 ))
 
 cells.append(new_markdown_cell(
-"""## Full run -- 3 problems x 10 bug types x 3 variants (up to 90 candidates before QC discards)
+"""## Full run -- 3 problems x 10 bug types x 20 variants (up to 600 candidates before QC discards)
 
+Variants >=1 use seeded sampling (not greedy), so they actually diversify instead of
+repeating near-identical edits -- locally this roughly doubled yield at variants=6 (57->109
+kept) and even got `compile_error` producing usable samples at all (0/9 under pure greedy).
+Pushing variants higher for maximum yield; some bug types (e.g. `style_error`) will likely
+saturate toward 100% long before 20, others (e.g. `edge_case_error`) have more headroom.
 Edit `--variants` to generate more/fewer per bug type."""
 ))
 
 cells.append(new_code_cell(
-"""!python -u synth_generate.py --variants 3
+"""!python -u synth_generate.py --variants 20
 """
 ))
 
