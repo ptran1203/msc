@@ -95,8 +95,11 @@ def task1_prompt(ds: Dataset, sample: dict, fewshot_ds: Dataset | None = None, f
 ## Rubric 6 chiều
 {rubric_desc}
 
-Hãy chấm bài trên theo rubric. Trả lời CHỈ một JSON object đúng định dạng:
-{{"rubric": {{"compilable": <0-1>, "io_format": <0-1>, "logic": <0-4>, "edge_case": <0-2>, "complexity": <0-1>, "code_quality": <0-1>}}, "total_score": <0-10>}}
+Trước khi chấm, hãy tự phân tích ngắn gọn: code có biên dịch được không (dựa vào compile_log
+nếu có), logic đúng/sai ở đâu, có xử lý edge case không. Viết phân tích đó vào trường "reasoning"
+TRƯỚC khi quyết định điểm — điểm phải nhất quán với phân tích, không mâu thuẫn.
+Trả lời CHỈ một JSON object đúng định dạng, "reasoning" phải đứng TRƯỚC "rubric":
+{{"reasoning": "<phân tích ngắn gọn, 2-4 câu>", "rubric": {{"compilable": <0-1>, "io_format": <0-1>, "logic": <0-4>, "edge_case": <0-2>, "complexity": <0-1>, "code_quality": <0-1>}}, "total_score": <0-10>}}
 """
 
 
@@ -129,12 +132,16 @@ def task2_prompt(ds: Dataset, sample: dict, fewshot_ds: Dataset | None = None, f
 ## Danh sách nhãn lỗi (taxonomy)
 [{labels_str}]
 
+Trước khi chọn nhãn, hãy tự phân tích ngắn gọn từng phần code: chỗ nào đúng, chỗ nào sai và vì
+sao. Một bài có thể mắc NHIỀU lỗi khác nhau cùng lúc — đừng chỉ dừng ở lỗi đầu tiên tìm được.
+Viết phân tích vào trường "reasoning" TRƯỚC khi chọn nhãn — nhãn phải nhất quán với phân tích.
 Hãy xác định các lỗi mà bài nộp trên mắc phải, chỉ chọn trong danh sách nhãn trên.
 Nếu bài không có lỗi nào, trả về danh sách rỗng ([]), KHÔNG được trả về object rỗng ({{}}).
-Trả lời CHỈ một JSON object đúng định dạng, luôn có key "taxonomy_error" dù danh sách rỗng hay không, ví dụ:
-{{"taxonomy_error": []}}
+Trả lời CHỈ một JSON object đúng định dạng, "reasoning" phải đứng TRƯỚC "taxonomy_error", luôn có
+key "taxonomy_error" dù danh sách rỗng hay không, ví dụ:
+{{"reasoning": "<phân tích ngắn gọn>", "taxonomy_error": []}}
 hoặc
-{{"taxonomy_error": ["Lỗi logic", "Lỗi vòng lặp"]}}
+{{"reasoning": "<phân tích ngắn gọn>", "taxonomy_error": ["Lỗi logic", "Lỗi vòng lặp"]}}
 """
 
 
@@ -156,16 +163,24 @@ def task3_prompt(ds: Dataset, sample: dict, fewshot_ds: Dataset | None = None, f
     log = sample["input"].get("compile_log") or "(không có)"
     given_errors = sample["input"].get("taxonomy_error")
 
+    reasoning_instr = (
+        "Trước khi viết phản hồi, hãy tự phân tích ngắn gọn vào trường \"reasoning\": code đúng/sai "
+        "ở đâu so với đề bài. \"reasoning\" không bị giới hạn độ dài và không tính vào mức độ phản hồi "
+        "(Level) -- CHỈ \"feedback\" mới phải tuân luật ngắn gọn/không tiết lộ đáp án ở trên."
+    )
     if given_errors is not None:
         diagnosis_block = f"## Nhãn lỗi đã xác định (cho sẵn, không cần tự chẩn đoán lại)\n{given_errors}"
-        output_instruction = 'Trả lời CHỈ một JSON object đúng định dạng:\n{"feedback": "<đoạn phản hồi tiếng Việt>"}'
+        output_instruction = (
+            f'{reasoning_instr}\nTrả lời CHỈ một JSON object đúng định dạng, "reasoning" đứng TRƯỚC "feedback":\n'
+            '{"reasoning": "<phân tích ngắn gọn>", "feedback": "<đoạn phản hồi tiếng Việt>"}'
+        )
     else:
         labels = ds.label_space["taxonomy_error"]
         labels_str = ", ".join(f'"{l}"' for l in labels)
         diagnosis_block = f"## Danh sách nhãn lỗi (taxonomy)\n[{labels_str}]\n\nNhãn lỗi KHÔNG được cho sẵn — hãy tự chẩn đoán trước khi viết phản hồi."
         output_instruction = (
-            'Trả lời CHỈ một JSON object đúng định dạng:\n'
-            '{"taxonomy_error": ["<nhãn1>", ...], "feedback": "<đoạn phản hồi tiếng Việt>"}'
+            f'{reasoning_instr}\nTrả lời CHỈ một JSON object đúng định dạng, "reasoning" đứng TRƯỚC "taxonomy_error":\n'
+            '{"reasoning": "<phân tích ngắn gọn>", "taxonomy_error": ["<nhãn1>", ...], "feedback": "<đoạn phản hồi tiếng Việt>"}'
         )
 
     if fewshot_ds is not None:

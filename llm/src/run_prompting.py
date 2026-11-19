@@ -20,6 +20,13 @@ from rag import RagIndex
 
 OUTPUT_DIR = REPO_ROOT / "outputs"
 _CJK_RE = re.compile(r"[一-鿿　-〿＀-￯]")  # Han ideographs + CJK/fullwidth punctuation
+# A few public-test submissions (the multi-problem, file-I/O/struct-based exams) run
+# 5000+ chars -- combined with few-shot/RAG exemplars this crosses the RTX 3060's VRAM
+# cliff (~4241-4799 input tokens, see llm/CLAUDE.md) and stalls for tens of minutes per
+# sample instead of ~10s. Zero-shot alone handles these fine (confirmed: this exact
+# sample graded normally under zero-shot), so just drop exemplars rather than truncate
+# the student's code -- the code itself must stay intact for accurate grading.
+MAX_CODE_CHARS_FOR_EXEMPLARS = 3000
 
 
 RUBRIC_DEFAULT = {d: 0 for d in ["compilable", "io_format", "logic", "edge_case", "complexity", "code_quality"]}
@@ -50,16 +57,21 @@ def run_task(llm, ds, task_num, log_path, fewshot_ds=None, rag_index=None, rag_k
     n_parse_fail = 0
     n_patched = 0
     n_cjk_retried = 0
+    n_exemplars_dropped = 0
     with open(log_path, "w", encoding="utf-8") as logf:
         bar = tqdm(samples, desc=f"task{task_num}", unit="sample")
         for sample in bar:
-            if rag_index is not None:
-                query_code = read_code(ds, sample)
+            query_code = read_code(ds, sample)
+            code_too_long = len(query_code) > MAX_CODE_CHARS_FOR_EXEMPLARS
+            if code_too_long:
+                n_exemplars_dropped += 1
+                prompt = builder(ds, sample)
+            elif rag_index is not None:
                 fewshot_items = rag_index.retrieve(query_code, k=rag_k, exclude_id=sample["sample_id"])
                 prompt = builder(ds, sample, fewshot_items=fewshot_items)
             else:
                 prompt = builder(ds, sample, fewshot_ds=fewshot_ds)
-            raw = llm.generate(SYSTEM_GRADER, prompt, max_new_tokens=500)
+            raw = llm.generate(SYSTEM_GRADER, prompt, max_new_tokens=700)
             parsed = extract_json(raw)
             if parsed is None:
                 n_parse_fail += 1
@@ -77,7 +89,7 @@ def run_task(llm, ds, task_num, log_path, fewshot_ds=None, rag_index=None, rag_k
                 # prompt even with an added reminder -- sample instead (seeded, reproducible)
                 # to actually escape it.
                 retry_prompt = prompt + "\n\n[Lưu ý: lần trước bạn lẫn ký tự KHÔNG phải tiếng Việt vào phản hồi. Viết lại HOÀN TOÀN bằng tiếng Việt, không chèn tiếng Trung/Anh.]"
-                retry_raw = llm.generate(SYSTEM_GRADER, retry_prompt, max_new_tokens=500, temperature=0.7)
+                retry_raw = llm.generate(SYSTEM_GRADER, retry_prompt, max_new_tokens=700, temperature=0.7)
                 retry_parsed = extract_json(retry_raw)
                 if retry_parsed and retry_parsed.get("feedback") and not _CJK_RE.search(retry_parsed["feedback"]):
                     parsed = retry_parsed
@@ -92,10 +104,15 @@ def run_task(llm, ds, task_num, log_path, fewshot_ds=None, rag_index=None, rag_k
                 # total_score is NOT an independent judgment -- it must equal the rubric sum,
                 # confirmed as a hard invariant in gold labels and enforced by the grader.
                 parsed["total_score"] = sum(parsed["rubric"].values())
+            # "reasoning" is only there to make the model think before answering (it's listed
+            # first in the schema so it's generated first) -- strip it before submission since
+            # it's not part of the official output schema; the raw log below keeps it for inspection.
+            parsed.pop("reasoning", None)
             predictions.append({"sample_id": sample["sample_id"], "output": parsed})
             logf.write(json.dumps({"sample_id": sample["sample_id"], "raw": raw}, ensure_ascii=False) + "\n")
             logf.flush()
-            bar.set_postfix(parse_fail=n_parse_fail, patched=n_patched, cjk_retried=n_cjk_retried)
+            bar.set_postfix(parse_fail=n_parse_fail, patched=n_patched, cjk_retried=n_cjk_retried, exemplars_dropped=n_exemplars_dropped)
+    print(f"  (dropped exemplars for {n_exemplars_dropped}/{len(samples)} samples with code >{MAX_CODE_CHARS_FOR_EXEMPLARS} chars, to avoid the VRAM cliff)")
     return predictions, n_parse_fail
 
 

@@ -33,7 +33,7 @@ def load_pool(task_num: int):
     if task_num in (1, 2) and SYNTH_DIR.exists():
         synth_ds = load_dataset(SYNTH_DIR)
         pool += [(synth_ds, s) for s in synth_ds.tasks[task_num]]
-    return pool
+    return [(ds, s) for ds, s in pool if len(read_code(ds, s)) <= MAX_EXEMPLAR_CODE_CHARS]
 
 
 class RagIndex:
