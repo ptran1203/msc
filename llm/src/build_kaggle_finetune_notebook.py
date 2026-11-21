@@ -111,9 +111,30 @@ for name in ("base_zeroshot", "finetuned"):
 ))
 
 cells.append(new_markdown_cell(
+"""## 4. Task 3 submission on public test (328) with the fine-tuned adapter
+
+Runs through `run_prompting.py --adapter`: same zero-shot `task3_prompt` the adapter was
+trained on (verified byte-identical), plus the production sanitize/retry/validate path."""
+))
+
+cells.append(new_code_cell(
+"""RUN_TAG = "qwen7b-ft-task3"
+cmd = lambda i: ["python", "-u", "run_prompting.py", "--split", "public", "--tasks", "3", "--adapter", "../outputs/ft_task3_lora",
+                 "--run-tag", RUN_TAG, "--num-shards", "2", "--shard-id", str(i)]
+procs = [subprocess.Popen(cmd(i), env={**os.environ, "CUDA_VISIBLE_DEVICES": str(i)}) for i in range(2)]
+for p in procs:
+    p.wait()
+assert all(p.returncode == 0 for p in procs), [p.returncode for p in procs]
+subprocess.run(["python", "merge_shards.py", "--split", "public", "--tasks", "3", "--method-tag", RUN_TAG, "--num-shards", "2"], check=True)
+subprocess.run(["python", "validate_submission.py", "3", f"../outputs/{RUN_TAG}/predictions_task3_public.json", "--split", "public"], check=True)
+"""
+))
+
+cells.append(new_markdown_cell(
 """## Collect + clean up
 
-Keeps only `/kaggle/working/ft_task3/` (targets, LoRA adapter, eval results) and deletes
+Keeps only `/kaggle/working/ft_task3/` (targets, LoRA adapter, eval results, and
+`submission/predictions_task3_finetuned.json`) and deletes
 the cloned repo so the saved output stays small."""
 ))
 
@@ -124,6 +145,8 @@ for p in glob.glob("../synth/generated/task3_ft_targets_shard*.jsonl"):
     shutil.copy(p, out)
 shutil.copytree("../outputs/ft_task3_lora", out / "lora", ignore=shutil.ignore_patterns("checkpoints"), dirs_exist_ok=True)
 shutil.copytree("../outputs/ft_task3_eval", out / "eval", dirs_exist_ok=True)
+(out / "submission").mkdir(exist_ok=True)
+shutil.copy(f"../outputs/{RUN_TAG}/predictions_task3_public.json", out / "submission" / "predictions_task3_finetuned.json")
 %cd /kaggle/working
 shutil.rmtree("/kaggle/working/msc", ignore_errors=True)
 print(sorted(str(p.relative_to(out)) for p in out.rglob("*")))

@@ -216,6 +216,7 @@ def main():
     ap.add_argument("--rag", action="store_true", help="retrieve top-k nearest exemplars by code similarity (sample_dataset + synthetic pool) instead of a fixed list; task3 has no synthetic data so falls back to --fewshot behavior")
     ap.add_argument("--rag-k", type=int, default=2, help="exemplars to retrieve per sample (keep small -- see VRAM cliff note in llm/CLAUDE.md)")
     ap.add_argument("--model", default=MODEL_NAME, help="HF model id or local path -- try a different model/checkpoint")
+    ap.add_argument("--adapter", default=None, help="path to a LoRA adapter on top of --model (e.g. outputs/ft_task3_lora from finetune_task3.py)")
     ap.add_argument("--run-tag", default=None, help="override the auto-derived tag in output filenames (default: <model>[_fewshot|_rag])")
     ap.add_argument("--no-resume", action="store_true", help="ignore any existing checkpoint for this --run-tag and start the run over from scratch (by default, rerunning the same --run-tag resumes from the last completed sample per task)")
     ap.add_argument("--num-shards", type=int, default=1, help="split each task's samples into this many disjoint shards -- for running one shard per GPU in parallel (see merge_shards.py)")
@@ -249,8 +250,8 @@ def main():
 
     run_dir = OUTPUT_DIR / method_tag
     run_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Loading {args.model} (seed={SEED}, fewshot={args.fewshot}, run_tag={method_tag})...")
-    llm = LocalLLM(model_name=args.model)
+    print(f"Loading {args.model} (adapter={args.adapter}, seed={SEED}, fewshot={args.fewshot}, run_tag={method_tag})...")
+    llm = LocalLLM(model_name=args.model, adapter=args.adapter)
 
     for task_num in task_nums:
         print(f"\n=== Task {task_num} ({method_tag}/{tag}, n={len(ds.tasks[task_num])}) ===")

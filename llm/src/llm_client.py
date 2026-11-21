@@ -10,7 +10,7 @@ SEED = 42
 
 
 class LocalLLM:
-    def __init__(self, model_name: str = MODEL_NAME, seed: int = SEED):
+    def __init__(self, model_name: str = MODEL_NAME, seed: int = SEED, adapter: str | None = None):
         torch.manual_seed(seed)
         self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -25,6 +25,9 @@ class LocalLLM:
             quantization_config=quant_config,
             device_map="auto",
         )
+        if adapter:
+            from peft import PeftModel
+            self.model = PeftModel.from_pretrained(self.model, adapter)
         self.model.eval()
 
     def generate(self, system: str, user: str, max_new_tokens: int = 512, temperature: float | None = None, seed: int | None = None) -> str:

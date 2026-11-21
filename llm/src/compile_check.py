@@ -5,6 +5,7 @@ the real signal instead, same oracle principle as the synthetic-data pipeline: t
 uses the input code, never the hidden gold labels.
 """
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -42,7 +43,8 @@ def attach_real_compile_log(ds, task_num: int) -> None:
             ok, stderr = _compile(read_code(ds, sample), sid)
             cache[sid] = "Biên dịch thành công." if ok else f"Lỗi biên dịch:\n{stderr[:500]}"
             changed = True
-        sample["input"]["compile_log"] = cache[sid]
+        # g++ prints our local work-dir path; teachers quote it as "student.cpp:51:26: error: ..."
+        sample["input"]["compile_log"] = re.sub(r"(?:[A-Za-z]:)?[^\s:]*[\\/][^\s\\/:]+\.cpp", "student.cpp", cache[sid])
 
     if changed:
         cache_path.parent.mkdir(parents=True, exist_ok=True)

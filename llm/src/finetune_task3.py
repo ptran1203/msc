@@ -53,13 +53,6 @@ STYLE_RULES = """Phong cách nhận xét của giảng viên thật (BẮT BUỘ
 - Chỉ viết tiếng Việt."""
 
 
-def normalize_compile_logs(ds) -> None:
-    """compile_check writes g++ output with our local work-dir path in it; real teacher
-    feedback quotes it as 'student.cpp:51:26: error: ...'. Same rewrite for train + eval."""
-    for s in ds.tasks[3]:
-        s["input"]["compile_log"] = re.sub(r"(?:[A-Za-z]:)?[^\s:]*[\\/][^\s\\/:]+\.cpp", "student.cpp", s["input"]["compile_log"])
-
-
 def first_compile_error(log: str) -> str:
     lines = log.splitlines()
     for i, line in enumerate(lines):
@@ -86,7 +79,6 @@ def load_synth_task3():
         inp = dict(s["input"], taxonomy_error=s["output"]["taxonomy_error"])
         ds.tasks[3].append({"sample_id": s["sample_id"], "input": inp, "rubric": rubric_by_id[s["sample_id"]]})
     attach_real_compile_log(ds, 3)
-    normalize_compile_logs(ds)
     return ds
 
 
@@ -223,14 +215,9 @@ def train(epochs: float, lr: float, max_steps: int):
 def evaluate(base: bool):
     ds = load_sample_dataset()
     attach_real_compile_log(ds, 3)
-    normalize_compile_logs(ds)
     valid_labels = set(ds.label_space["taxonomy_error"])
-    llm = LocalLLM()
+    llm = LocalLLM(adapter=None if base else str(ADAPTER_DIR))
     name = "base_zeroshot" if base else "finetuned"
-    if not base:
-        from peft import PeftModel
-        llm.model = PeftModel.from_pretrained(llm.model, str(ADAPTER_DIR))
-        llm.model.eval()
     EVAL_DIR.mkdir(parents=True, exist_ok=True)
     records = []
     for i, s in enumerate(ds.tasks[3]):
