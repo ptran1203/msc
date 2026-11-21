@@ -16,7 +16,8 @@ class LocalLLM:
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         quant_config = BitsAndBytesConfig(
             load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.bfloat16,
+            # T4 (Kaggle) has no native bf16 -- fp16 there, bf16 on Ampere+ (local 3060)
+            bnb_4bit_compute_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
             bnb_4bit_quant_type="nf4",
         )
         self.model = AutoModelForCausalLM.from_pretrained(

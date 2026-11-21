@@ -1,0 +1,15 @@
+{
+  "id": "ptran1203/llm-task3-finetune",
+  "title": "LLM Task3 Finetune",
+  "code_file": "finetune_task3.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_tpu": "false",
+  "enable_internet": "true",
+  "dataset_sources": ["ptran1203/llm-autograding-course-data"],
+  "competition_sources": [],
+  "kernel_sources": ["ptran1203/llm-synth-data-generator"],
+  "model_sources": []
+}

@@ -45,4 +45,5 @@ def attach_real_compile_log(ds, task_num: int) -> None:
         sample["input"]["compile_log"] = cache[sid]
 
     if changed:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
