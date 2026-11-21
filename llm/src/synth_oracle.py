@@ -88,10 +88,57 @@ def gen_earliest_login_cases(rng: random.Random):
     return [(c, False) for c in general] + [(c, True) for c in edge]
 
 
+def gen_binary_search_cases(rng: random.Random):
+    def fmt(arr, target):
+        return f"{len(arr)}\n{' '.join(map(str, arr))}\n{target}\n"
+
+    general = []
+    for _ in range(6):
+        n = rng.randint(5, 30)
+        arr = sorted(rng.sample(range(-100, 100), n))
+        target = rng.choice(arr) if rng.random() < 0.5 else rng.randint(-150, 150)
+        general.append(fmt(arr, target))
+    edge = [
+        fmt([5], 5),  # single element, found
+        fmt([5], -1),  # single element, not found
+        fmt([1, 2, 3, 4, 5], 1),  # target is first element
+        fmt([1, 2, 3, 4, 5], 5),  # target is last element
+        fmt([1, 2, 3, 4, 5], 0),  # smaller than all
+        fmt([1, 2, 3, 4, 5], 6),  # larger than all
+    ]
+    return [(c, False) for c in general] + [(c, True) for c in edge]
+
+
+def gen_palindrome_check_cases(rng: random.Random):
+    import string
+
+    def rand_word(n):
+        return "".join(rng.choice(string.ascii_lowercase) for _ in range(n))
+
+    general = []
+    for _ in range(6):
+        n = rng.randint(4, 15)
+        half = rand_word(n // 2)
+        is_pal = rng.random() < 0.5
+        word = half + half[::-1] if is_pal else half + rand_word(n - len(half))
+        general.append(word + "\n")
+    general += ["A man a plan a canal Panama\n", "hello world\n"]
+    edge = [
+        "a\n",  # single char
+        "aa\n",  # two identical chars
+        "ab\n",  # two different chars
+        "...,,,\n",  # only punctuation -- empty after stripping, trivially palindrome
+        "Madam, I'm Adam.\n",  # case + punctuation mixed in
+    ]
+    return [(c, False) for c in general] + [(c, True) for c in edge]
+
+
 PROBLEM_GENERATORS = {
     "armstrong": gen_armstrong_cases,
     "remove_duplicates": gen_remove_duplicates_cases,
     "earliest_login": gen_earliest_login_cases,
+    "binary_search": gen_binary_search_cases,
+    "palindrome_check": gen_palindrome_check_cases,
 }
 
 

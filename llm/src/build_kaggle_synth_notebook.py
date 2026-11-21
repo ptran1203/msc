@@ -49,7 +49,7 @@ print("data staged OK")
 ))
 
 cells.append(new_markdown_cell(
-"""## Smoke test -- oracle self-check, then 1 bug type x 1 variant x 3 problems
+"""## Smoke test -- oracle self-check, then 1 bug type x 1 variant x 5 problems
 
 Per the no-heavy-compute-without-checking-first rule: verify the oracle (compile/run/compare,
 no model needed) and the full LLM pipeline both work before the real run."""
@@ -67,7 +67,14 @@ cells.append(new_code_cell(
 ))
 
 cells.append(new_markdown_cell(
-"""## Full run -- 3 problems x 10 bug types x 20 variants (up to 600 candidates before QC discards)
+"""## Full run -- 5 problems x 10 bug types x 20 variants (up to 1000 candidates before QC discards)
+
+Two new problems added (binary_search, palindrome_check) beyond the original 3
+(armstrong, remove_duplicates, earliest_login) -- the only other real single-problem
+exam (Class03-Midterm-1) turned out to be a duplicate Armstrong instance, and the
+remaining real exams are a different struct + file-I/O + linked-list family with no
+stdin/stdout main(), too big a lift to retrofit here -- so these two synthesize their
+own exam metadata instead of reusing a real exam's.
 
 Variants >=1 use seeded sampling (not greedy), so they actually diversify instead of
 repeating near-identical edits -- locally this roughly doubled yield at variants=6 (57->109

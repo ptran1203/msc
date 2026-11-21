@@ -63,5 +63,5 @@ BUG_TAXONOMY = {
     },
 }
 
-# which bug types are meaningful for which reference problem (all apply to all 3 for now)
-APPLICABLE_PROBLEMS = ["armstrong", "remove_duplicates", "earliest_login"]
+# which bug types are meaningful for which reference problem (all apply to all 5 for now)
+APPLICABLE_PROBLEMS = ["armstrong", "remove_duplicates", "earliest_login", "binary_search", "palindrome_check"]

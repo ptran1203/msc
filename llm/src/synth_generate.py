@@ -38,7 +38,46 @@ PROBLEM_TO_REAL_EXAM = {
     "remove_duplicates": ("Class03-Midterm-2", "public"),
     "earliest_login": ("Class03-Final-1", "public"),
 }
-SYN_EXAM_ID = {"armstrong": "SYN-ARMSTRONG", "remove_duplicates": "SYN-DEDUP", "earliest_login": "SYN-LOGIN"}
+# More problems beyond these 3 real ones aren't free: the only other single_problem real
+# exam (Class03-Midterm-1) turns out to be a duplicate Armstrong instance, and the
+# remaining real exams (EX01, Class01-Test1/2, Class02-Test1) are a different struct +
+# file-I/O + linked-list family with no stdin/stdout main() -- would need a whole new
+# oracle harness, too big a lift for a diversity pass. These two instead synthesize their
+# own exam metadata (no real exam backing) but reuse the exact same stdin/stdout harness.
+PROBLEM_SYNTHETIC_EXAM = {
+    "binary_search": {
+        "exam_type": "single_problem",
+        "language": "cpp",
+        "statement": (
+            "## Tìm kiếm nhị phân\n\n"
+            "Cho một mảng gồm n số nguyên ĐÃ SẮP XẾP TĂNG DẦN và một giá trị target. "
+            "Viết chương trình tìm vị trí (chỉ số, bắt đầu từ 0) của target trong mảng. "
+            "Nếu không tìm thấy, in ra -1. Yêu cầu dùng thuật toán tìm kiếm nhị phân "
+            "(binary search), không duyệt tuyến tính toàn bộ mảng.\n\n"
+            "**Input:** dòng 1: n; dòng 2: n số nguyên đã sắp xếp tăng; dòng 3: target.\n"
+            "**Output:** chỉ số của target, hoặc -1 nếu không có."
+        ),
+        "grading_policy": "Chấm trên một bài duy nhất; điểm rubric là điểm của cả bài.",
+    },
+    "palindrome_check": {
+        "exam_type": "single_problem",
+        "language": "cpp",
+        "statement": (
+            "## Kiểm tra palindrome\n\n"
+            "Viết chương trình đọc một dòng chuỗi (có thể chứa khoảng trắng, dấu câu, "
+            "chữ hoa/thường) và kiểm tra chuỗi đó có là palindrome hay không SAU KHI bỏ "
+            "qua mọi ký tự không phải chữ/số và không phân biệt chữ hoa/thường.\n\n"
+            "**Input:** một dòng chuỗi.\n"
+            "**Output:** in `True` nếu là palindrome, `False` nếu không."
+        ),
+        "grading_policy": "Chấm trên một bài duy nhất; điểm rubric là điểm của cả bài.",
+    },
+}
+SYN_EXAM_ID = {
+    "armstrong": "SYN-ARMSTRONG", "remove_duplicates": "SYN-DEDUP", "earliest_login": "SYN-LOGIN",
+    "binary_search": "SYN-BINSEARCH", "palindrome_check": "SYN-PALINDROME",
+}
+ALL_PROBLEMS = list(PROBLEM_TO_REAL_EXAM) + list(PROBLEM_SYNTHETIC_EXAM)
 
 
 def mutation_prompt(problem_name: str, ref_code: str, bug_id: str, variant_idx: int) -> str:
@@ -62,6 +101,9 @@ def build_synthetic_exams():
         real_exam = ds.exams[real_exam_id]
         syn_id = SYN_EXAM_ID[problem]
         exams[syn_id] = {**real_exam, "exam_id": syn_id, "note": f"Synthetic bug-injected variants of {real_exam_id}'s problem."}
+    for problem, defn in PROBLEM_SYNTHETIC_EXAM.items():
+        syn_id = SYN_EXAM_ID[problem]
+        exams[syn_id] = {"exam_id": syn_id, "note": f"Synthetic bug-injected variants of a standalone {problem} problem (no real exam backing).", **defn}
     return exams
 
 
@@ -74,7 +116,7 @@ def generate(limit_bugs: int | None = None, variants: int = VARIANTS_PER_BUG):
     n_discarded = 0
     bug_ids = list(BUG_TAXONOMY)[:limit_bugs] if limit_bugs else list(BUG_TAXONOMY)
 
-    for problem in PROBLEM_TO_REAL_EXAM:
+    for problem in ALL_PROBLEMS:
         syn_exam_id = SYN_EXAM_ID[problem]
         ref_code = (REF_DIR / f"{problem}.cpp").read_text(encoding="utf-8")
         oracle_cases = build_oracle(problem)
