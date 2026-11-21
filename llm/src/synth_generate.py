@@ -14,6 +14,7 @@ under Bash's sandbox). Fit a single sample first (see smoke-test block) before t
 """
 import argparse
 import json
+import re
 import time
 from pathlib import Path
 
@@ -94,6 +95,22 @@ Trả lời CHỈ bằng code C++ đã sửa, trong một code block duy nhất.
 """
 
 
+_CPP_TOKENS_RE = re.compile(r'"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'|//[^\n]*|/\*.*?\*/', re.S)
+
+
+def strip_cpp_comments(code: str) -> str:
+    """The mutator LLM annotates its own edit in ~56% of samples ("// Sai == thành !=",
+    "// Xóa dấu chấm phẩy ở đây") -- the answer written into the input. References have
+    no comments, so drop them all. String literals are left alone and line numbers are
+    preserved (feedback targets cite them)."""
+    def repl(m):
+        tok = m.group(0)
+        if tok[0] in "\"'":
+            return tok
+        return "\n" * tok.count("\n")
+    return "\n".join(line.rstrip() for line in _CPP_TOKENS_RE.sub(repl, code).split("\n"))
+
+
 def build_synthetic_exams():
     exams = {}
     for problem, (real_exam_id, split) in PROBLEM_TO_REAL_EXAM.items():
@@ -134,6 +151,8 @@ def generate(limit_bugs: int | None = None, variants: int = VARIANTS_PER_BUG):
                 temperature = None if v == 0 else 0.8
                 raw = llm.generate(SYSTEM_MUTATOR, prompt, max_new_tokens=800, temperature=temperature, seed=v)
                 code = extract_code_block(raw)
+                if code is not None:
+                    code = strip_cpp_comments(code)
                 if code is None:
                     print(f"  SKIP {sample_id}: no code block extracted ({time.time()-t0:.1f}s)")
                     n_discarded += 1

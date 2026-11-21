@@ -50,6 +50,17 @@ shutil.copytree("{DATASET_MOUNT}/data", repo_llm / "data")
 shutil.copytree("{SYNTH_MOUNT}", repo_llm / "synth" / "generated")
 n = json.loads((repo_llm / "synth/generated/task2_error_taxonomy.json").read_text())["n_samples"]
 print("synth samples:", n)
+
+# The mutator annotates its own edit in ~56% of samples ("// Sai == thành !=") -- the
+# answer leaking into the input. Older synth outputs predate the in-generator fix.
+import sys; sys.path.insert(0, str(repo_llm / "src"))
+from synth_generate import strip_cpp_comments
+n_stripped = 0
+for p in (repo_llm / "synth/generated/submissions").rglob("*.cpp"):
+    src = p.read_text(encoding="utf-8"); out = strip_cpp_comments(src)
+    if out != src:
+        p.write_text(out, encoding="utf-8"); n_stripped += 1
+print("comments stripped from", n_stripped, "synth files")
 """
 ))
 
