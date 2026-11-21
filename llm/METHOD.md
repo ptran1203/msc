@@ -134,6 +134,14 @@ Fix: added an explicit brevity instruction to `task3_prompt` + enabled the alrea
 
 **Leaderboard result: 0.1005 -> 0.1471** (46% relative improvement) -- confirms the fix translates to the real metric, not just the local overlap proxy (which showed a larger 90% relative gain locally; same pattern as Task 2's CV-to-leaderboard gap, local proxies consistently overestimate real-leaderboard gains on this project).
 
+## 4d. Task 3 fix: same-level RAG exemplar selection (2026-11-21)
+
+Also added this session: a real `compile_log` (g++, not the always-empty released field), a `"reasoning"` field forcing the model to think before answering, and an empty-feedback retry (some samples returned valid JSON with `"feedback": ""`).
+
+The static 3-exemplar few-shot list (one per level) was replaced with `rag.py:nearest_same_level_exemplar()` -- a single same-level exemplar picked by code-similarity embedding instead. Tested 5 candidate ideas on the 32 gold-labeled `sample_dataset` samples (forcing self-diagnosis to actually measure label accuracy, since `sample_dataset` normally gives `taxonomy_error`): same-level RAG exemplar won on every metric (macro_f1 0.2204->0.2217, jaccard 0.4323->0.4479, overlap_f1 0.1799->0.1843) using fewer exemplars. Two ideas that looked promising on paper -- hinting Task 2's own predicted labels into the self-diagnosis prompt, and an explicit compile_log-based logic guard against picking a compile-error label -- both measurably hurt (macro_f1 down to 0.139 and 0.127 respectively), confusing self-diagnosis instead of anchoring it. Compliance was 1.0 across every variant tested, confirming level-brevity was never the bottleneck -- self-diagnosis label accuracy was.
+
+**Leaderboard result: 0.1471 -> 0.1784** (21% relative improvement), combined with the other three fixes above.
+
 ## 5. Submission pipeline
 
 `src/run_prompting.py` generates `predictions.json` per task; `src/validate_submission.py` checks schema/value-range/sample-id-coverage before anything would be submitted externally (no official checker script was provided in this data drop, so this is our own reconstruction of the schema). First real submission files for `public_test_release` (328 samples) generated via `python run_prompting.py --split public --tasks 1,2,3`.
