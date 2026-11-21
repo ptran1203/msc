@@ -130,6 +130,10 @@ Fix: added an explicit brevity instruction to `task3_prompt` + enabled the alrea
 
 **Side issue found and fixed**: ~6-9% of samples (2-3/32) had the model mix Chinese characters into otherwise-Vietnamese feedback (e.g. "硬编码在代码中，应改为参数filename") -- a real, recurring failure mode, not a fluke. An explicit "Vietnamese only" instruction cut it from 3/32 to 2/32 but didn't eliminate it; a sampled retry (seeded, temperature=0.7 -- greedy retry deterministically repeated the same failure) still missed 1-2 stubborn cases. Added a deterministic last-resort cleanup in `run_prompting.py` (`_CJK_RE`, covering Han ideographs + CJK/fullwidth punctuation) that strips any surviving CJK characters before writing the final prediction -- guarantees no CJK ever ships, even though prompt-level fixes alone couldn't fully prevent the model from generating it.
 
+**Public submission regenerated** (`predictions_task3_public_qwen2.5-coder-7b_fewshot.json`, 328 samples, schema-valid, 0 CJK contamination). Average feedback length: zero-shot 221 chars -> fewshot+brevity 83 chars -- a 62% reduction, confirming the brevity fix holds at full scale, not just on the 32-sample validation set.
+
+**Leaderboard result: 0.1005 -> 0.1471** (46% relative improvement) -- confirms the fix translates to the real metric, not just the local overlap proxy (which showed a larger 90% relative gain locally; same pattern as Task 2's CV-to-leaderboard gap, local proxies consistently overestimate real-leaderboard gains on this project).
+
 ## 5. Submission pipeline
 
 `src/run_prompting.py` generates `predictions.json` per task; `src/validate_submission.py` checks schema/value-range/sample-id-coverage before anything would be submitted externally (no official checker script was provided in this data drop, so this is our own reconstruction of the schema). First real submission files for `public_test_release` (328 samples) generated via `python run_prompting.py --split public --tasks 1,2,3`.

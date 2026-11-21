@@ -2,6 +2,7 @@
 import json
 
 from data import Dataset, read_code
+from rag import nearest_same_level_exemplar
 
 SYSTEM_GRADER = (
     "Bạn là trợ giảng chấm bài lập trình C++ cho sinh viên. "
@@ -20,12 +21,12 @@ SYSTEM_GRADER = (
 #   exemplar: an earlier version including EX01-S109 ("Lỗi biên dịch") caused the model to
 #   anchor on that exact label for 23/32 samples regardless of actual code shown, and this
 #   held regardless of the exemplar's position in the list (not just recency bias). See METHOD.md.
-# Task 3 -- one exemplar per level actually present in the data (1, 2, 3); already short
-#   enough (~2K tokens) that no reduction was needed.
+# Task 3 has no static list -- nearest_same_level_exemplar() (rag.py) picks a single
+#   same-level exemplar dynamically per query instead; it beat this static-list approach
+#   on every metric in local testing, so there's no FEWSHOT_IDS[3] entry anymore.
 FEWSHOT_IDS = {
     1: ["EX01-S109", "EX01-S108", "EX02-S211"],
     2: ["EX01-S115", "EX01-S105"],
-    3: ["EX02-S201", "EX01-S101", "EX02-S207"],
 }
 
 
@@ -188,7 +189,11 @@ def task3_prompt(ds: Dataset, sample: dict, fewshot_ds: Dataset | None = None, f
             output_fn = lambda ex: {"feedback": ex["output"]["feedback"]}
         else:
             output_fn = lambda ex: {"taxonomy_error": ex["input"]["taxonomy_error"], "feedback": ex["output"]["feedback"]}
-        fewshot = _fewshot_block(fewshot_ds, 3, sample["sample_id"], output_fn)
+        # Single same-level nearest-neighbor exemplar beat the static 3-exemplar list
+        # on every metric in local testing (see METHOD.md) -- replaces FEWSHOT_IDS[3].
+        exemplar = nearest_same_level_exemplar(code, level, fewshot_ds, exclude_id=sample["sample_id"])
+        items = [(fewshot_ds, exemplar)] if exemplar else []
+        fewshot = _fewshot_block_from_items(items, output_fn)
     else:
         fewshot = ""
 

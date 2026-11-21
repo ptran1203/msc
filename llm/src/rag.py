@@ -36,6 +36,24 @@ def load_pool(task_num: int):
     return [(ds, s) for ds, s in pool if len(read_code(ds, s)) <= MAX_EXEMPLAR_CODE_CHARS]
 
 
+def nearest_same_level_exemplar(query_code: str, level: str, fewshot_ds, exclude_id: str | None = None):
+    """Task 3 few-shot selection: the single same-level exemplar from fewshot_ds whose
+    code is most similar to the query, replacing the static 3-exemplar FEWSHOT_IDS[3]
+    list. A research spike (32-sample sample_dataset, self-diagnosis forced) confirmed
+    this beats the static list on every metric (macro_f1/micro_f1/jaccard/overlap_f1)
+    while using fewer exemplars (lower VRAM-cliff risk, see llm/CLAUDE.md) -- level
+    match matters more than exemplar count for Task 3's level-brevity requirement."""
+    candidates = [s for s in fewshot_ds.tasks[3]
+                  if s["input"]["target_feedback_level"] == level and s["sample_id"] != exclude_id]
+    if not candidates:
+        return None
+    codes = [read_code(fewshot_ds, s) for s in candidates]
+    embeddings = _get_model().encode(codes, normalize_embeddings=True)
+    q = _get_model().encode([query_code], normalize_embeddings=True)[0]
+    sims = embeddings @ q
+    return candidates[int(np.argmax(sims))]
+
+
 class RagIndex:
     def __init__(self, task_num: int):
         self.pool = load_pool(task_num)

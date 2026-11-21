@@ -101,36 +101,48 @@ for method, run_tag in RUN_TAGS.items():
 ))
 
 cells.append(new_code_cell(
-"""import glob, re
-for path in sorted(glob.glob("../outputs/predictions_task*_public_*.json")):
-    if "_shard" in path:
-        continue  # per-GPU partial outputs, not the merged submission files
+"""import glob, re, subprocess, pathlib
+valid_paths = set()
+for path in sorted(glob.glob("../outputs/*/predictions_task*_public.json")):
+    path = str(pathlib.Path(path).resolve())
     task_num = re.search(r"predictions_task(\\d)_", path).group(1)
-    get_ipython().system(f"python validate_submission.py {task_num} {path} --split public")
+    r = subprocess.run(["python", "validate_submission.py", task_num, path, "--split", "public"])
+    print(path, "-> OK" if r.returncode == 0 else "-> FAIL (will NOT be collected)")
+    if r.returncode == 0:
+        valid_paths.add(path)
 """
 ))
 
 cells.append(new_markdown_cell(
 """## Collect submissions + clean up
 
-Copies the 6 final (validated) predictions files -- 3 tasks x 2 configs -- into
-`/kaggle/working/submission/` under plain `predictions_task{N}_{fewshot,rag}.json` names,
-then deletes the cloned repo -- so the notebook's saved output is only that one folder
-instead of the whole source tree + per-shard intermediates."""
+Each run-tag now writes to its own `outputs/{run_tag}/` folder (one folder per run id,
+instead of flat files disambiguated only by a filename suffix). Copies only the predictions
+files that PASSED validation above into `/kaggle/working/submission/`, under plain
+`predictions_task{N}_{fewshot,rag}.json` names, then deletes the cloned repo -- so the
+notebook's saved output is only that one folder instead of the whole source tree + per-shard
+intermediates. Earlier this silently shipped invalid files regardless of validation result
+(`!python validate_submission.py` doesn't stop the notebook on a non-zero exit code) --
+raises instead now, so a schema violation surfaces as a failed kernel, not a rejected
+Kaggle submission."""
 ))
 
 cells.append(new_code_cell(
 """import shutil, pathlib
 sub_dir = pathlib.Path("/kaggle/working/submission")
 sub_dir.mkdir(exist_ok=True)
+missing_or_invalid = []
 for method, run_tag in RUN_TAGS.items():
     for t in (1, 2, 3):
-        src = pathlib.Path(f"/kaggle/working/msc/llm/outputs/predictions_task{t}_public_{run_tag}.json")
-        if src.exists():
+        src = pathlib.Path(f"/kaggle/working/msc/llm/outputs/{run_tag}/predictions_task{t}_public.json")
+        if str(src.resolve()) in valid_paths:
             shutil.copy(src, sub_dir / f"predictions_task{t}_{method}.json")
+        else:
+            missing_or_invalid.append(str(src))
 %cd /kaggle/working
 shutil.rmtree("/kaggle/working/msc", ignore_errors=True)
 print("submission files:", sorted(p.name for p in sub_dir.iterdir()))
+assert not missing_or_invalid, f"did NOT collect (missing or failed validation): {missing_or_invalid}"
 """
 ))
 

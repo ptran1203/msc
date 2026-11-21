@@ -45,7 +45,33 @@ def required_fields(task_num, ds):
     return {"taxonomy_error", "feedback"} if task3_self_diagnoses else {"feedback"}
 
 
-def run_task(llm, ds, task_num, log_path, fewshot_ds=None, rag_index=None, rag_k=2):
+def sanitize_output(parsed, valid_labels):
+    """extract_json only guarantees valid JSON, not that values match the expected
+    schema shape -- the model occasionally emits taxonomy_error as a bare string or
+    feedback as a list/object. validate_format() below only checks key PRESENCE, so
+    this slips past it (and past Kaggle's own submission scoring: 'the value at
+    .../0 has the wrong shape'). Coerce to the shapes the sample_submission schema
+    requires (list[str] / str) instead of shipping whatever the model produced."""
+    if "taxonomy_error" in parsed:
+        labels = parsed["taxonomy_error"]
+        if isinstance(labels, str):
+            labels = [labels]
+        elif not isinstance(labels, list):
+            labels = []
+        parsed["taxonomy_error"] = [l for l in labels if isinstance(l, str) and l in valid_labels]
+    if "feedback" in parsed:
+        fb = parsed["feedback"]
+        if isinstance(fb, list):
+            fb = "; ".join(str(x) for x in fb)
+        elif isinstance(fb, dict):
+            fb = fb.get("feedback") or fb.get("text") or json.dumps(fb, ensure_ascii=False)
+        if not isinstance(fb, str):
+            fb = str(fb)
+        parsed["feedback"] = fb
+    return parsed
+
+
+def run_task(llm, ds, task_num, log_path, ckpt_path, resume=True, fewshot_ds=None, rag_index=None, rag_k=2):
     builder = {1: task1_prompt, 2: task2_prompt, 3: task3_prompt}[task_num]
     samples = ds.tasks[task_num]
     required = required_fields(task_num, ds)
@@ -53,13 +79,31 @@ def run_task(llm, ds, task_num, log_path, fewshot_ds=None, rag_index=None, rag_k
     if task_num == 3 and "taxonomy_error" in required:
         defaults["taxonomy_error"] = []
 
-    predictions = []
+    # Resume support: each completed prediction is appended to ckpt_path as it's produced
+    # (not just at the end), so killing/restarting the process with the same --run-tag
+    # picks back up after the last completed sample instead of regenerating everything.
+    done = {}
+    if resume and ckpt_path.exists():
+        with open(ckpt_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    entry = json.loads(line)
+                    done[entry["sample_id"]] = entry
+    remaining = [s for s in samples if s["sample_id"] not in done]
+    if done:
+        print(f"  resuming: {len(done)}/{len(samples)} samples already done, {len(remaining)} remaining")
+
+    valid_labels = set(ds.label_space.get("taxonomy_error", []))
+    predictions = list(done.values())
     n_parse_fail = 0
     n_patched = 0
     n_cjk_retried = 0
+    n_empty_feedback_retried = 0
     n_exemplars_dropped = 0
-    with open(log_path, "w", encoding="utf-8") as logf:
-        bar = tqdm(samples, desc=f"task{task_num}", unit="sample")
+    file_mode = "a" if done else "w"
+    with open(log_path, file_mode, encoding="utf-8") as logf, open(ckpt_path, file_mode, encoding="utf-8") as ckptf:
+        bar = tqdm(remaining, desc=f"task{task_num}", unit="sample", initial=len(done), total=len(samples))
         for sample in bar:
             query_code = read_code(ds, sample)
             code_too_long = len(query_code) > MAX_CODE_CHARS_FOR_EXEMPLARS
@@ -82,6 +126,7 @@ def run_task(llm, ds, task_num, log_path, fewshot_ds=None, rag_index=None, rag_k
                     n_patched += 1
                     for key in missing:
                         parsed[key] = defaults[key]
+                parsed = sanitize_output(parsed, valid_labels)
             # Task 3 occasionally mixes in Chinese characters despite the Vietnamese-only
             # instruction (observed ~6-9% of samples) -- retry once with an emphatic reminder.
             if task_num == 3 and parsed.get("feedback") and _CJK_RE.search(parsed["feedback"]):
@@ -91,7 +136,15 @@ def run_task(llm, ds, task_num, log_path, fewshot_ds=None, rag_index=None, rag_k
                 retry_prompt = prompt + "\n\n[Lưu ý: lần trước bạn lẫn ký tự KHÔNG phải tiếng Việt vào phản hồi. Viết lại HOÀN TOÀN bằng tiếng Việt, không chèn tiếng Trung/Anh.]"
                 retry_raw = llm.generate(SYSTEM_GRADER, retry_prompt, max_new_tokens=700, temperature=0.7)
                 retry_parsed = extract_json(retry_raw)
+                if retry_parsed is not None:
+                    retry_parsed = sanitize_output(retry_parsed, valid_labels)
                 if retry_parsed and retry_parsed.get("feedback") and not _CJK_RE.search(retry_parsed["feedback"]):
+                    # The retry prompt only asks it to rewrite "feedback" -- carry over any
+                    # other required field (e.g. taxonomy_error) from the original parse
+                    # instead of losing it if the retry response omits it.
+                    for key in required:
+                        if key not in retry_parsed:
+                            retry_parsed[key] = parsed.get(key, defaults[key])
                     parsed = retry_parsed
                     raw = retry_raw
                     n_cjk_retried += 1
@@ -100,6 +153,22 @@ def run_task(llm, ds, task_num, log_path, fewshot_ds=None, rag_index=None, rag_k
                     # a couple of stubborn samples) -- strip CJK chars rather than ship them.
                     parsed["feedback"] = _CJK_RE.sub(" ", parsed["feedback"])
                     parsed["feedback"] = re.sub(r"\s{2,}", " ", parsed["feedback"]).strip()
+            # Weaker models (observed heavily on Qwen2.5-Coder-1.5B, ~27% of Task 3 samples)
+            # sometimes write a non-empty "reasoning" but leave "feedback" itself blank --
+            # valid JSON, valid shape, but empty content Kaggle's checker still rejects.
+            if task_num == 3 and not parsed.get("feedback", "").strip():
+                retry_prompt = prompt + "\n\n[Lưu ý: câu trả lời trước bị thiếu trường \"feedback\" (để trống). Hãy viết lại ĐẦY ĐỦ, trường \"feedback\" KHÔNG được để trống.]"
+                retry_raw = llm.generate(SYSTEM_GRADER, retry_prompt, max_new_tokens=700, temperature=0.7)
+                retry_parsed = extract_json(retry_raw)
+                if retry_parsed is not None:
+                    retry_parsed = sanitize_output(retry_parsed, valid_labels)
+                if retry_parsed and retry_parsed.get("feedback", "").strip():
+                    for key in required:
+                        if key not in retry_parsed:
+                            retry_parsed[key] = parsed.get(key, defaults[key])
+                    parsed = retry_parsed
+                    raw = retry_raw
+                    n_empty_feedback_retried += 1
             if task_num == 1 and "rubric" in parsed:
                 # total_score is NOT an independent judgment -- it must equal the rubric sum,
                 # confirmed as a hard invariant in gold labels and enforced by the grader.
@@ -108,10 +177,13 @@ def run_task(llm, ds, task_num, log_path, fewshot_ds=None, rag_index=None, rag_k
             # first in the schema so it's generated first) -- strip it before submission since
             # it's not part of the official output schema; the raw log below keeps it for inspection.
             parsed.pop("reasoning", None)
-            predictions.append({"sample_id": sample["sample_id"], "output": parsed})
+            entry = {"sample_id": sample["sample_id"], "output": parsed}
+            predictions.append(entry)
+            ckptf.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            ckptf.flush()
             logf.write(json.dumps({"sample_id": sample["sample_id"], "raw": raw}, ensure_ascii=False) + "\n")
             logf.flush()
-            bar.set_postfix(parse_fail=n_parse_fail, patched=n_patched, cjk_retried=n_cjk_retried, exemplars_dropped=n_exemplars_dropped)
+            bar.set_postfix(parse_fail=n_parse_fail, patched=n_patched, cjk_retried=n_cjk_retried, empty_fb_retried=n_empty_feedback_retried, exemplars_dropped=n_exemplars_dropped)
     print(f"  (dropped exemplars for {n_exemplars_dropped}/{len(samples)} samples with code >{MAX_CODE_CHARS_FOR_EXEMPLARS} chars, to avoid the VRAM cliff)")
     return predictions, n_parse_fail
 
@@ -145,6 +217,7 @@ def main():
     ap.add_argument("--rag-k", type=int, default=2, help="exemplars to retrieve per sample (keep small -- see VRAM cliff note in llm/CLAUDE.md)")
     ap.add_argument("--model", default=MODEL_NAME, help="HF model id or local path -- try a different model/checkpoint")
     ap.add_argument("--run-tag", default=None, help="override the auto-derived tag in output filenames (default: <model>[_fewshot|_rag])")
+    ap.add_argument("--no-resume", action="store_true", help="ignore any existing checkpoint for this --run-tag and start the run over from scratch (by default, rerunning the same --run-tag resumes from the last completed sample per task)")
     ap.add_argument("--num-shards", type=int, default=1, help="split each task's samples into this many disjoint shards -- for running one shard per GPU in parallel (see merge_shards.py)")
     ap.add_argument("--shard-id", type=int, default=0, help="which shard (0-indexed) this process handles; pair with CUDA_VISIBLE_DEVICES to pin it to one GPU")
     args = ap.parse_args()
@@ -172,21 +245,26 @@ def main():
     method_suffix = "_rag" if args.rag else ("_fewshot" if args.fewshot else "")
     method_tag = args.run_tag or short_model_name(args.model) + method_suffix
     shard_suffix = f"_shard{args.shard_id}of{args.num_shards}" if args.num_shards > 1 else ""
-    tag = f"{args.split}_{method_tag}{shard_suffix}"
+    tag = f"{args.split}{shard_suffix}"
 
-    OUTPUT_DIR.mkdir(exist_ok=True)
+    run_dir = OUTPUT_DIR / method_tag
+    run_dir.mkdir(parents=True, exist_ok=True)
     print(f"Loading {args.model} (seed={SEED}, fewshot={args.fewshot}, run_tag={method_tag})...")
     llm = LocalLLM(model_name=args.model)
 
     for task_num in task_nums:
-        print(f"\n=== Task {task_num} ({tag}, n={len(ds.tasks[task_num])}) ===")
-        log_path = OUTPUT_DIR / f"raw_task{task_num}_{tag}.jsonl"
+        print(f"\n=== Task {task_num} ({method_tag}/{tag}, n={len(ds.tasks[task_num])}) ===")
+        log_path = run_dir / f"raw_task{task_num}_{tag}.jsonl"
+        ckpt_path = run_dir / f"predictions_task{task_num}_{tag}.ckpt.jsonl"
         rag_index = None
         if args.rag and task_num in (1, 2):
             print(f"  building RAG index for task{task_num} (embedding pool, CPU)...")
             rag_index = RagIndex(task_num)
             print(f"  pool size: {len(rag_index.pool)}")
-        predictions, n_fail = run_task(llm, ds, task_num, log_path, fewshot_ds=fewshot_ds, rag_index=rag_index, rag_k=args.rag_k)
+        predictions, n_fail = run_task(
+            llm, ds, task_num, log_path, ckpt_path, resume=not args.no_resume,
+            fewshot_ds=fewshot_ds, rag_index=rag_index, rag_k=args.rag_k,
+        )
 
         errors = validate_format(task_num, predictions, ds)
         if errors:
@@ -194,7 +272,7 @@ def main():
         else:
             print("  format OK")
 
-        pred_path = OUTPUT_DIR / f"predictions_task{task_num}_{tag}.json"
+        pred_path = run_dir / f"predictions_task{task_num}_{tag}.json"
         with open(pred_path, "w", encoding="utf-8") as f:
             json.dump(predictions, f, ensure_ascii=False, indent=2)
         print(f"  wrote {pred_path} (parse failures: {n_fail}/{len(predictions)})")

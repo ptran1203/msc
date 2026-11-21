@@ -40,8 +40,11 @@ def validate_task2(output, label_space):
     labels = output.get("taxonomy_error")
     if not isinstance(labels, list):
         return ["taxonomy_error missing or not a list"]
+    non_str = [l for l in labels if not isinstance(l, str)]
+    if non_str:
+        errors.append(f"taxonomy_error has non-string element(s): {non_str}")
     valid = set(label_space["taxonomy_error"])
-    bad = [l for l in labels if l not in valid]
+    bad = [l for l in labels if isinstance(l, str) and l not in valid]
     if bad:
         errors.append(f"unknown labels: {bad}")
     return errors
@@ -54,8 +57,11 @@ def validate_task3(output, label_space, self_diagnose):
         if not isinstance(labels, list):
             errors.append("taxonomy_error missing or not a list")
         else:
+            non_str = [l for l in labels if not isinstance(l, str)]
+            if non_str:
+                errors.append(f"taxonomy_error has non-string element(s): {non_str}")
             valid = set(label_space["taxonomy_error"])
-            bad = [l for l in labels if l not in valid]
+            bad = [l for l in labels if isinstance(l, str) and l not in valid]
             if bad:
                 errors.append(f"unknown labels: {bad}")
     fb = output.get("feedback")
