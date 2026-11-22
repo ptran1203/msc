@@ -10,6 +10,10 @@ DATASET_MOUNT = f"/kaggle/input/datasets/{KAGGLE_USERNAME}/{DATASET_SLUG}"
 TESTS_SLUG = "llm-autograding-llm-tests"
 TESTS_MOUNT = f"/kaggle/input/datasets/{KAGGLE_USERNAME}/{TESTS_SLUG}"
 RUN_TAG = "qwen7b-fewshot-testreport"
+# Which of the 2 shards this version runs. Both -> merged + rules + validated submission files.
+# A subset (re-running a crashed shard) -> just that shard's prediction files are collected,
+# merged locally with the shard(s) recovered from an earlier version.
+SHARD_IDS = [0]
 
 cells = []
 
@@ -75,11 +79,14 @@ import os, subprocess
 RUN_TAG = "{RUN_TAG}"
 cmd = lambda i: ["python", "-u", "run_prompting.py", "--split", "public", "--tasks", "1,2,3", "--fewshot",
                  "--run-tag", RUN_TAG, "--num-shards", "2", "--shard-id", str(i)]
-procs = [subprocess.Popen(cmd(i), env={{**os.environ, "CUDA_VISIBLE_DEVICES": str(i)}}) for i in range(2)]
+SHARD_IDS = {SHARD_IDS}
+FULL = sorted(SHARD_IDS) == [0, 1]
+procs = [subprocess.Popen(cmd(i), env={{**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu)}}) for gpu, i in enumerate(SHARD_IDS)]
 for p in procs:
     p.wait()
 assert all(p.returncode == 0 for p in procs), [p.returncode for p in procs]
-subprocess.run(["python", "merge_shards.py", "--split", "public", "--tasks", "1,2,3", "--method-tag", RUN_TAG, "--num-shards", "2"], check=True)
+if FULL:
+    subprocess.run(["python", "merge_shards.py", "--split", "public", "--tasks", "1,2,3", "--method-tag", RUN_TAG, "--num-shards", "2"], check=True)
 """
 ))
 
@@ -92,15 +99,16 @@ or the kernel fails here instead of shipping an invalid file."""
 ))
 
 cells.append(new_code_cell(
-"""subprocess.run(["python", "postprocess_task3.py", f"../outputs/{RUN_TAG}/predictions_task3_public.json",
-                "--out-tag", f"{RUN_TAG}-rules"], check=True)
-FINAL = {
+"""FINAL = {
     1: f"../outputs/{RUN_TAG}/predictions_task1_public.json",
     2: f"../outputs/{RUN_TAG}/predictions_task2_public.json",
     3: f"../outputs/{RUN_TAG}-rules/predictions_task3_public.json",
 }
-for t, path in FINAL.items():
-    subprocess.run(["python", "validate_submission.py", str(t), path, "--split", "public"], check=True)
+if FULL:
+    subprocess.run(["python", "postprocess_task3.py", f"../outputs/{RUN_TAG}/predictions_task3_public.json",
+                    "--out-tag", f"{RUN_TAG}-rules"], check=True)
+    for t, path in FINAL.items():
+        subprocess.run(["python", "validate_submission.py", str(t), path, "--split", "public"], check=True)
 """
 ))
 
@@ -113,10 +121,14 @@ Keeps only `/kaggle/working/submission/` and deletes the cloned repo."""
 cells.append(new_code_cell(
 """sub_dir = pathlib.Path("/kaggle/working/submission")
 sub_dir.mkdir(exist_ok=True)
-for t, path in FINAL.items():
-    shutil.copy(path, sub_dir / f"predictions_task{t}.json")
-# Task 3 before the rules too, so the rules' effect can be measured on the leaderboard
-shutil.copy(f"../outputs/{RUN_TAG}/predictions_task3_public.json", sub_dir / "predictions_task3_norules.json")
+if FULL:
+    for t, path in FINAL.items():
+        shutil.copy(path, sub_dir / f"predictions_task{t}.json")
+    # Task 3 before the rules too, so the rules' effect can be measured on the leaderboard
+    shutil.copy(f"../outputs/{RUN_TAG}/predictions_task3_public.json", sub_dir / "predictions_task3_norules.json")
+else:  # partial re-run: ship the shard files (predictions + ckpt + raw) for a local merge
+    for f in glob.glob(f"../outputs/{RUN_TAG}/*shard*"):
+        shutil.copy(f, sub_dir)
 %cd /kaggle/working
 shutil.rmtree("/kaggle/working/msc", ignore_errors=True)
 print("submission files:", sorted(p.name for p in sub_dir.iterdir()))
