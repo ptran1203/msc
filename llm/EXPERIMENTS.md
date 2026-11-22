@@ -18,6 +18,7 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 
 | date | run_id | note | local | sub |
 |---|---|---|---|---|
+| 2026-11-22 | `qwen3-8b-thinking` testreport ablation (Colab T4) | same as `testreport_ablation` but **Qwen3-8B, thinking mode** (`eval_testreport_sample.py --model Qwen/Qwen3-8B --thinking`) | running | — |
 | 2026-11-22 | `testreport_ablation` (local, 32 items) | A: idea2 prompt + compile-only log, no test_report · B: + test_report (17/32 items, EX02) · A/B + rules 1+2 — `eval_testreport_sample.py` | macro / overlap / compl: **A** .2372 / .1986 / 1.0 · **B** .2190 / .1992 / 1.0 · **A+rules** .2372 / .2599 / 1.0 · **B+rules** .2190 / .2644 / 1.0 → test_report doesn't help labels (−.018 macro); rules give +.06 overlap | — |
 | 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + **test_report** in prompt, then both rules | running | — |
 | 2026-11-22 | `qwen7b-fewshot-v2-rules` | `-compilefix` + rule 2: Level 1 + passes all verified tests → "Tốt.", labels [] (82 samples, 43 changed) | public compliance 1.0 | not yet |
@@ -37,7 +38,7 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 
 | date | run_id | note | local | sub |
 |---|---|---|---|---|
-| 2026-11-22 | `qwen7b-fewshot-testreport-sample` vs `qwen7b-fewshot-noreport-sample` (local) | few-shot + compile-only log, with vs without test_report (17/32 items get one) | paused, rerun later | — |
+| 2026-11-22 | `qwen7b-fewshot-testreport-sample` vs `qwen7b-fewshot-noreport-sample` (local) | few-shot + compile-only log, with vs without test_report (17/32 items get one) | macro / micro: **with** .1521 / .3896 · **without** .1612 / .4103 → test_report slightly hurts | — |
 | 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + test_report | running | — |
 | 2026-11-20 | `submission_task2_ensemble` | `ensemble.py`: zero-shot + `qwen-rag`, label union | — | **0.1289** |
 | 2026-11-19 | `qwen-rag` (runner v8) | RAG exemplars | — | 0.0421 |
@@ -48,7 +49,7 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 
 | date | run_id | note | local | sub |
 |---|---|---|---|---|
-| 2026-11-22 | `qwen7b-fewshot-testreport-sample` vs `qwen7b-fewshot-noreport-sample` (local) | few-shot + compile-only log, with vs without test_report (17/32 items get one) | paused, rerun later | — |
+| 2026-11-22 | `qwen7b-fewshot-testreport-sample` vs `qwen7b-fewshot-noreport-sample` (local) | few-shot + compile-only log, with vs without test_report (17/32 items get one); rubric clamped to range | QWK / MAE: **with** .5662 / 2.375 · **without** .5765 / 2.375 → no QWK gain; per-dim exact better with report (logic .66 vs .53, edge .47 vs .41, quality .56 vs .63) | — |
 | 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + test_report | running | — |
 | 2026-11-19 | `qwen-rag` (runner v8) | RAG exemplars, no compile_log | — | -0.2171 |
 | 2026-11-19 | `qwen-fewshot` | static few-shot, no compile_log | — | -0.2108 |
