@@ -38,6 +38,9 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 
 | date | run_id | note | local | sub |
 |---|---|---|---|---|
+| 2026-11-23 | `task2-t3rules-u-feat-svc` | union of `task2-from-t3-rules` + `task2-feat-svc` | macro .3037 / micro .3830 (best local) | not yet |
+| 2026-11-23 | `task2-feat-svc` | **no LLM**: LinearSVC on grounded run signals (g++ compile, test pass/format/timeout/crash fractions; synth gets them via oracle-built suites) + code stats; train 593 synth + real | macro .2883 / micro .3465 (beats LLM t3+rules .2782 on macro). Over-predicts: 2.69 labels/item vs gold 1.28 (public 2.65) | not yet |
+| 2026-11-23 | `ml-task2-grid` (`ml_task2_grid.py`) | {MiniLM emb, run+stats feat, both} × {LogReg, LinearSVC, LightGBM}, LOO on 32 real | alone macro: emb .064/.080/.064 · **feat .254/.288/.212** · emb+feat .181/.227/.225 → embeddings hurt; SVC best; LGBM overfits small data | — |
 | 2026-11-23 | `task2-from-t3-rules` | Task 2 labels = Task 3 self-diagnosis (`qwen7b-fewshot-v2` T3 public) + rules: real g++ fail → add/remove `Lỗi biên dịch`; test_report all-failures-format → add `Lỗi nhập/xuất` (`task2_from_task3.py`, combo `t3+compile+format`) | macro .2782 / micro .5135 (Task 2 prompt alone: .1612 / .4103; Task 2 prompt + rules .2106 / .4533) | **0.1634** (assumed this file; user reported score without naming it) |
 | 2026-11-23 | `task2-union-t3-rules` | same, union of Task 3 + Task 2 (`submission_task2_ensemble`) labels + rules (`union+compile+format`) — more rare labels on public | macro .2820 / micro .4889 | **0.1649** (assumed this file) |
 | 2026-11-23 | `ml-task2-logreg` (+ ensembles) | MiniLM embeddings + OvR LogReg on 593 synth + real; **leave-one-out on 32 real** (old .303 CV mixed synth into validation → inflated) | alone .1387 / .2297 · `t3∪ml`+rules .2759 / .3776 · 2-of-3 vote+rules .2539 / .4658 → no-go, doesn't beat t3+rules | — |
