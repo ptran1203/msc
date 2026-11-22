@@ -101,7 +101,7 @@ def compile_exe(code: str, tag: str):
     cpp, exe = WORK_DIR / f"{tag}.cpp", WORK_DIR / f"{tag}.exe"
     cpp.write_text(code, encoding="utf-8")
     try:
-        r = subprocess.run(["g++", "-std=c++11", "-w", "-O1", str(cpp), "-o", str(exe)], capture_output=True, text=True, timeout=60)
+        r = subprocess.run(["g++", "-std=c++11", "-w", "-O1", str(cpp), "-o", str(exe)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
     except subprocess.TimeoutExpired:
         return None
     return exe if r.returncode == 0 else None
@@ -110,7 +110,7 @@ def compile_exe(code: str, tag: str):
 def run_exe(exe, stdin: str):
     """-> (stdout, status) with status in ok / timeout / crash."""
     try:
-        r = subprocess.run([str(exe)], input=stdin, capture_output=True, text=True, timeout=RUN_TIMEOUT_S)
+        r = subprocess.run([str(exe)], input=stdin, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=RUN_TIMEOUT_S)
     except subprocess.TimeoutExpired:
         return "", "timeout"
     return r.stdout, "ok" if r.returncode == 0 else "crash"

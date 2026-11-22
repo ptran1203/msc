@@ -27,7 +27,7 @@ def _compile(code: str, tag: str) -> tuple[bool, str]:
         # "error:" line past the 500-char cut.
         result = subprocess.run(
             ["g++", "-std=c++11", "-c", "-w", str(cpp_path), "-o", str(obj_path)],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
         )
     except subprocess.TimeoutExpired:
         return False, "TIMEOUT"
