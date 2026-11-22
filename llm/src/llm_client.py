@@ -10,9 +10,15 @@ SEED = 42
 
 
 class LocalLLM:
-    def __init__(self, model_name: str = MODEL_NAME, seed: int = SEED, adapter: str | None = None):
+    def __init__(self, model_name: str = MODEL_NAME, seed: int = SEED, adapter: str | None = None,
+                 thinking: bool = False, think_budget: int = 1536):
+        """thinking=True: Qwen3-style hybrid models think in <think>...</think> before answering
+        (chat template's enable_thinking). think_budget extra new tokens are allowed for it, and
+        the think block is stripped from the returned text so callers parse only the answer."""
         torch.manual_seed(seed)
         self.model_name = model_name
+        self.thinking = thinking
+        self.think_budget = think_budget
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         quant_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -38,7 +44,12 @@ class LocalLLM:
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
-        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        template_kwargs = {"enable_thinking": True} if self.thinking else {}
+        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, **template_kwargs)
+        if self.thinking:
+            max_new_tokens += self.think_budget
+            if temperature is None:  # Qwen3 docs: greedy decoding loops in thinking mode -> seeded sampling
+                temperature = 0.6
         inputs = self.tokenizer(text, return_tensors="pt").to(self.model.device)
         if temperature is not None:
             torch.manual_seed(seed if seed is not None else SEED)
@@ -48,11 +59,15 @@ class LocalLLM:
                 max_new_tokens=max_new_tokens,
                 do_sample=temperature is not None,
                 temperature=temperature,
-                top_p=0.9 if temperature is not None else None,
+                top_p=(0.95 if self.thinking else 0.9) if temperature is not None else None,
                 pad_token_id=self.tokenizer.eos_token_id,
             )
         new_tokens = out[0][inputs["input_ids"].shape[1]:]
-        return self.tokenizer.decode(new_tokens, skip_special_tokens=True)
+        text = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
+        if self.thinking:
+            # answer = everything after the last </think>; no </think> = budget ran out mid-thought
+            text = text.rsplit("</think>", 1)[1] if "</think>" in text else ""
+        return text
 
 
 def extract_code_block(text: str) -> str | None:
