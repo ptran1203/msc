@@ -51,7 +51,11 @@ f"""import shutil, pathlib, glob
 repo_llm = pathlib.Path("/kaggle/working/msc/llm")
 shutil.copytree("{DATASET_MOUNT}/data", repo_llm / "data")
 (repo_llm / "outputs/llm_tests").mkdir(parents=True, exist_ok=True)
-for p in glob.glob("{TESTS_MOUNT}/*.json"):
+# mount paths differ between datasets (/kaggle/input/<slug> vs /kaggle/input/datasets/<user>/<slug>),
+# so find the suites wherever they landed
+print("mounted:", sorted(glob.glob("/kaggle/input/*")) + sorted(glob.glob("/kaggle/input/datasets/*/*")))
+suite_files = [p for p in glob.glob("/kaggle/input/**/*.json", recursive=True) if "{TESTS_SLUG}" in p]
+for p in suite_files:
     shutil.copy(p, repo_llm / "outputs/llm_tests")
 print("test suites:", sorted(p.name for p in (repo_llm / "outputs/llm_tests").iterdir()))
 assert len(list((repo_llm / "outputs/llm_tests").iterdir())) >= 3, "test-suite dataset not attached"
