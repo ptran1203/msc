@@ -1,4 +1,4 @@
-transformers>=4.57
+transformers>=4.57,<5
 accelerate>=1.14
 bitsandbytes>=0.50
 peft>=0.17

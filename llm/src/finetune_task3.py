@@ -15,6 +15,7 @@ half of these wrong in a smoke test (e.g. inverted io_format fixes, false edge-c
 import argparse
 import difflib
 import json
+import math
 import random
 import re
 
@@ -232,9 +233,12 @@ def train(model_name: str, epochs: float, lr: float, max_steps: int):
     ))
     model.print_trainable_parameters()
 
+    grad_accum = 8
+    total_steps = max_steps if max_steps > 0 else math.ceil(len(rows) / grad_accum * epochs)
     args = TrainingArguments(
-        output_dir=str(out_dir / "checkpoints"), per_device_train_batch_size=1, gradient_accumulation_steps=8,
-        num_train_epochs=epochs, max_steps=max_steps, learning_rate=lr, lr_scheduler_type="cosine", warmup_ratio=0.05,
+        output_dir=str(out_dir / "checkpoints"), per_device_train_batch_size=1, gradient_accumulation_steps=grad_accum,
+        num_train_epochs=epochs, max_steps=max_steps, learning_rate=lr, lr_scheduler_type="cosine",
+        warmup_steps=max(1, int(0.05 * total_steps)),  # warmup_ratio was removed in transformers v5
         bf16=use_bf16, fp16=not use_bf16, logging_steps=5, save_strategy="no", report_to=[], seed=SEED,
         gradient_checkpointing=True, gradient_checkpointing_kwargs={"use_reentrant": False},
     )
