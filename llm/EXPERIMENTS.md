@@ -20,7 +20,7 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 |---|---|---|---|---|
 | 2026-11-22 | `qwen3-8b-thinking` testreport ablation (Colab T4) | same as `testreport_ablation` but **Qwen3-8B, thinking mode** (`eval_testreport_sample.py --model Qwen/Qwen3-8B --thinking`) | running | — |
 | 2026-11-22 | `testreport_ablation` (local, 32 items) | A: idea2 prompt + compile-only log, no test_report · B: + test_report (17/32 items, EX02) · A/B + rules 1+2 — `eval_testreport_sample.py` | macro / overlap / compl: **A** .2372 / .1986 / 1.0 · **B** .2190 / .1992 / 1.0 · **A+rules** .2372 / .2599 / 1.0 · **B+rules** .2190 / .2644 / 1.0 → test_report doesn't help labels (−.018 macro); rules give +.06 overlap | — |
-| 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + **test_report** in prompt, then both rules | running | — |
+| 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + **test_report** in prompt, then both rules | **failed**: shard 0 crashed at startup (student program printed non-UTF-8 bytes; fixed in 44da59f). Shard 1 (164 items, all 3 tasks) recovered to `outputs/qwen7b-fewshot-testreport/` | — |
 | 2026-11-22 | `qwen7b-fewshot-v2-rules` | `-compilefix` + rule 2: Level 1 + passes all verified tests → "Tốt.", labels [] (82 samples, 43 changed) | public compliance 1.0 | not yet |
 | 2026-11-22 | `qwen7b-fewshot-v2-compilefix` | `qwen7b-fewshot-v2` + rule 1: Level 2 + real compile error → first g++ error line, + "Lỗi biên dịch" (70 samples). Source line dropped after it caused 4 compliance violations | public compliance 1.0 (0.988 with source line) | **0.30** (uncertain which of the two versions was uploaded) |
 | 2026-11-22 | `ft_task3_lora_qwen2.5-coder-1.5b-instruct` | QLoRA 1.5B, 92 synth samples (7B-written targets), 3 epochs | macro .1114 / overlap .1298 / compl .906* (base 1.5B: .1014 / .0200 / 1.0) | — |
@@ -45,7 +45,7 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 | 2026-11-23 | `task2-union-t3-rules` | same, union of Task 3 + Task 2 (`submission_task2_ensemble`) labels + rules (`union+compile+format`) — more rare labels on public | macro .2820 / micro .4889 | **0.1649** (assumed this file) |
 | 2026-11-23 | `ml-task2-logreg` (+ ensembles) | MiniLM embeddings + OvR LogReg on 593 synth + real; **leave-one-out on 32 real** (old .303 CV mixed synth into validation → inflated) | alone .1387 / .2297 · `t3∪ml`+rules .2759 / .3776 · 2-of-3 vote+rules .2539 / .4658 → no-go, doesn't beat t3+rules | — |
 | 2026-11-22 | `qwen7b-fewshot-testreport-sample` vs `qwen7b-fewshot-noreport-sample` (local) | few-shot + compile-only log, with vs without test_report (17/32 items get one) | macro / micro: **with** .1521 / .3896 · **without** .1612 / .4103 → test_report slightly hurts | — |
-| 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + test_report | running | — |
+| 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + test_report | failed (see Task 3 row); shard 1 recovered | — |
 | 2026-11-20 | `submission_task2_ensemble` | `ensemble.py`: zero-shot + `qwen-rag`, label union | — | **0.1289** |
 | 2026-11-19 | `qwen-rag` (runner v8) | RAG exemplars | — | 0.0421 |
 | 2026-11-13 | few-shot (static) | 2 static exemplars | macro .075–.080 | — |
@@ -58,6 +58,6 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 | 2026-11-23 | `task1-multi-v3` | **multi-problem collapse**: every earlier file in this log scored public multi-problem ~0.7/10 (single ~5.6) — link-based compile log faked failures on function-only files + model applied the P1 'fail to read the file' prerequisite (QA: ignore it). Fix (`task1_multi.py`): compile rule (g++ fail → multi all 0 / single code_quality 1, 6/6 on sample; clean → compilable=1) + multi-problem scored **per problem, equal weights, no prerequisite**, dims averaged; singles from `qwen7b-fewshot-v2` + compile rule | sample multi (15) QWK .383 → **.467**; public multi mean 0.72 → 2.05 (63 compile-rule zeros, 21 compiling items ≥6) | **0.7331** (prev best 0.69, user-reported) |
 | ? | unknown (user-reported) | Task 1 submission not logged here — file/run unknown | — | **0.69** |
 | 2026-11-22 | `qwen7b-fewshot-testreport-sample` vs `qwen7b-fewshot-noreport-sample` (local) | few-shot + compile-only log, with vs without test_report (17/32 items get one); rubric clamped to range | QWK / MAE: **with** .5662 / 2.375 · **without** .5765 / 2.375 → no QWK gain; per-dim exact better with report (logic .66 vs .53, edge .47 vs .41, quality .56 vs .63) | — |
-| 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + test_report | running | — |
+| 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + test_report | failed (see Task 3 row); shard 1 recovered | — |
 | 2026-11-19 | `qwen-rag` (runner v8) | RAG exemplars, no compile_log | — | -0.2171 |
 | 2026-11-19 | `qwen-fewshot` | static few-shot, no compile_log | — | -0.2108 |
