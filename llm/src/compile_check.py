@@ -18,11 +18,15 @@ CACHE_DIR = REPO_ROOT / "outputs"
 
 def _compile(code: str, tag: str) -> tuple[bool, str]:
     cpp_path = WORK_DIR / f"{tag}.cpp"
-    exe_path = WORK_DIR / f"{tag}.exe"
+    obj_path = WORK_DIR / f"{tag}.o"
     cpp_path.write_text(code, encoding="utf-8")
     try:
+        # -c: compile only, no link. Multi-problem exams require submitting ONLY the asked
+        # functions (graders link their own main), so linking failed ~18 public files
+        # that compile fine. -w: warnings came first in stderr and pushed the real
+        # "error:" line past the 500-char cut.
         result = subprocess.run(
-            ["g++", "-std=c++11", str(cpp_path), "-o", str(exe_path)],
+            ["g++", "-std=c++11", "-c", "-w", str(cpp_path), "-o", str(obj_path)],
             capture_output=True, text=True, timeout=30,
         )
     except subprocess.TimeoutExpired:
@@ -30,10 +34,23 @@ def _compile(code: str, tag: str) -> tuple[bool, str]:
     return result.returncode == 0, result.stderr
 
 
+def first_compile_error(log: str) -> str:
+    """The first g++ error line (+ the source line g++ prints under it) -- how teachers
+    quote compile errors in Level 2 feedback ("student.cpp:51:26: error: ...")."""
+    lines = log.splitlines()
+    for i, line in enumerate(lines):
+        if "error:" in line:
+            if i + 1 < len(lines) and re.match(r"\s*\d+ \|", lines[i + 1]):
+                return f"{line}\n{lines[i + 1]}"
+            return line
+    return "Lỗi biên dịch."
+
+
 def attach_real_compile_log(ds, task_num: int) -> None:
     """Mutates ds.tasks[task_num] samples in place, setting input.compile_log from a real
     g++ compile. Cached to disk per dataset root so repeat runs don't recompile."""
-    cache_path = CACHE_DIR / f"compile_log_cache_{ds.root.name}.json"
+    # v2: compile-only + no warnings (see _compile); v1 entries were link-based
+    cache_path = CACHE_DIR / f"compile_log_cache_v2_{ds.root.name}.json"
     cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
 
     changed = False

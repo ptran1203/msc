@@ -22,7 +22,7 @@ import re
 import torch
 
 import prompts as P
-from compile_check import attach_real_compile_log
+from compile_check import attach_real_compile_log, first_compile_error
 from data import REPO_ROOT, load_dataset, load_sample_dataset, read_code
 from llm_client import MODEL_NAME, SEED, LocalLLM, extract_json
 from research_task3_ideas import build_self_diagnose_prompt, sanitize, score
@@ -56,17 +56,6 @@ STYLE_RULES = """Phong cách nhận xét của giảng viên thật (BẮT BUỘ
 - Nếu là lỗi style (code chạy đúng): Level 2/3 nhận xét về tên biến / cách trình bày, không nói code sai.
 - Các dạng trong ngoặc chỉ là KHUÔN, phải thay bằng nội dung của ĐÚNG lỗi đã biết ở trên -- KHÔNG chép lại khuôn.
 - Chỉ viết tiếng Việt."""
-
-
-def first_compile_error(log: str) -> str:
-    lines = log.splitlines()
-    for i, line in enumerate(lines):
-        if "error:" in line:
-            # g++ follows the error with the offending source line ("   51 |   code")
-            if i + 1 < len(lines) and re.match(r"\s*\d+ \|", lines[i + 1]):
-                return f"{line}\n{lines[i + 1]}"
-            return line
-    return "Lỗi biên dịch."
 
 
 def parse_bug_id(sample) -> str:
