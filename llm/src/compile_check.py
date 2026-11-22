@@ -34,13 +34,15 @@ def _compile(code: str, tag: str) -> tuple[bool, str]:
     return result.returncode == 0, result.stderr
 
 
-def first_compile_error(log: str) -> str:
-    """The first g++ error line (+ the source line g++ prints under it) -- how teachers
-    quote compile errors in Level 2 feedback ("student.cpp:51:26: error: ...")."""
+def first_compile_error(log: str, with_source: bool = False) -> str:
+    """The first g++ error line -- how teachers quote compile errors in Level 2 feedback
+    ("student.cpp:51:26: error: ..."). The source line g++ prints under it is left out by
+    default: it's code, and Task 3's level-compliance metric counts code in Level 1/2
+    feedback as a violation (it turned 4 public samples non-compliant)."""
     lines = log.splitlines()
     for i, line in enumerate(lines):
         if "error:" in line:
-            if i + 1 < len(lines) and re.match(r"\s*\d+ \|", lines[i + 1]):
+            if with_source and i + 1 < len(lines) and re.match(r"\s*\d+ \|", lines[i + 1]):
                 return f"{line}\n{lines[i + 1]}"
             return line
     return "Lỗi biên dịch."
