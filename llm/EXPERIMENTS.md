@@ -18,6 +18,7 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 
 | date | run_id | note | local | sub |
 |---|---|---|---|---|
+| 2026-11-23 | `qwen7b-fewshot-testreport` (runner v12, shard 0 only) | re-run of v11's crashed shard 0 (164 items, Tasks 1-3) after the decode fix; merge locally with v11 shard 1 | running | — |
 | 2026-11-22 | `qwen3-8b-thinking` testreport ablation (Colab T4) | same as `testreport_ablation` but **Qwen3-8B, thinking mode** (`eval_testreport_sample.py --model Qwen/Qwen3-8B --thinking`) | running | — |
 | 2026-11-22 | `testreport_ablation` (local, 32 items) | A: idea2 prompt + compile-only log, no test_report · B: + test_report (17/32 items, EX02) · A/B + rules 1+2 — `eval_testreport_sample.py` | macro / overlap / compl: **A** .2372 / .1986 / 1.0 · **B** .2190 / .1992 / 1.0 · **A+rules** .2372 / .2599 / 1.0 · **B+rules** .2190 / .2644 / 1.0 → test_report doesn't help labels (−.018 macro); rules give +.06 overlap | — |
 | 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + **test_report** in prompt, then both rules | **failed**: shard 0 crashed at startup (student program printed non-UTF-8 bytes; fixed in 44da59f). Shard 1 (164 items, all 3 tasks) recovered to `outputs/qwen7b-fewshot-testreport/` | — |
