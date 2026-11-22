@@ -1,5 +1,5 @@
 """Build the Kaggle runner notebook: clones the public code repo, attaches the private
-data via the Kaggle dataset mount, and runs the grading pipeline on Kaggle's free GPU."""
+data via Kaggle dataset mounts, and runs the grading pipeline on Kaggle's free GPU."""
 import nbformat as nbf
 from nbformat.v4 import new_code_cell, new_markdown_cell, new_notebook
 
@@ -7,27 +7,32 @@ REPO_URL = "https://github.com/ptran1203/msc.git"
 KAGGLE_USERNAME = "ptran1203"
 DATASET_SLUG = "llm-autograding-course-data"
 DATASET_MOUNT = f"/kaggle/input/datasets/{KAGGLE_USERNAME}/{DATASET_SLUG}"
-SYNTH_KERNEL_SLUG = "llm-synth-data-generator"
-SYNTH_MOUNT = f"/kaggle/input/notebooks/{KAGGLE_USERNAME}/{SYNTH_KERNEL_SLUG}/synth_generated"
+TESTS_SLUG = "llm-autograding-llm-tests"
+TESTS_MOUNT = f"/kaggle/input/datasets/{KAGGLE_USERNAME}/{TESTS_SLUG}"
+RUN_TAG = "qwen7b-fewshot-testreport"
 
 cells = []
 
 cells.append(new_markdown_cell(
 f"""# LLM auto-grading -- Kaggle runner
 
-Clones the public code repo ([{REPO_URL}]({REPO_URL})) and attaches the private data
-via the Kaggle dataset `ptran1203/{DATASET_SLUG}`, plus the synthetic bug-injection data
-via the `ptran1203/{SYNTH_KERNEL_SLUG}` notebook's output (both added automatically when
-pushed via `kernel_sources`/`dataset_sources` in kernel-metadata.json). Course rules forbid
-distributing the real student data outside the class, so it lives only in that private
-dataset, never in the repo itself.
+Clones the public code repo ([{REPO_URL}]({REPO_URL})) and attaches two private datasets:
+`ptran1203/{DATASET_SLUG}` (the real student data -- course rules forbid distributing it,
+so it never goes in the repo) and `ptran1203/{TESTS_SLUG}` (the verified LLM-generated test
+suites from `test_report.py`, uploaded as-is so the tests here are exactly the ones checked
+locally against the 32 gold samples).
 
-Edit the **config cell** below, then Run All."""
+Every submission gets two input signals the released data leaves empty, both obtained by
+running the student's own code (never gold labels): the real g++ `compile_log`
+(`compile_check.py`, compile-only) and `test_report` (`test_report.py`, single-problem exams).
+
+**Needs accelerator "GPU T4 x2"** (Settings -> Accelerator), set once by hand in the editor."""
 ))
 
 cells.append(new_code_cell(
 """import torch
-print("GPU available:", torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else "")
+print("GPUs:", [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())])
+assert torch.cuda.device_count() == 2, "set the accelerator to GPU T4 x2"
 """
 ))
 
@@ -37,125 +42,84 @@ f"""%cd /kaggle/working
 !git clone --depth 1 {REPO_URL}
 %cd /kaggle/working/msc/llm
 !pip install -q -r requirements.txt
+!which g++ || (apt-get update -qq && apt-get install -y -qq g++ > /dev/null)
 """
 ))
 
 cells.append(new_code_cell(
-f"""import shutil, pathlib
-dataset_root = pathlib.Path("{DATASET_MOUNT}")
-synth_root = pathlib.Path("{SYNTH_MOUNT}")
+f"""import shutil, pathlib, glob
 repo_llm = pathlib.Path("/kaggle/working/msc/llm")
-shutil.copytree(dataset_root / "data", repo_llm / "data")
-(repo_llm / "synth").mkdir(exist_ok=True)
-shutil.copytree(synth_root, repo_llm / "synth" / "generated")
-print("data staged OK")
+shutil.copytree("{DATASET_MOUNT}/data", repo_llm / "data")
+(repo_llm / "outputs/llm_tests").mkdir(parents=True, exist_ok=True)
+for p in glob.glob("{TESTS_MOUNT}/*.json"):
+    shutil.copy(p, repo_llm / "outputs/llm_tests")
+print("test suites:", sorted(p.name for p in (repo_llm / "outputs/llm_tests").iterdir()))
+assert len(list((repo_llm / "outputs/llm_tests").iterdir())) >= 3, "test-suite dataset not attached"
 """
 ))
 
 cells.append(new_markdown_cell(
-"""## Run -- generates the public submission (328 samples, all 3 tasks), TWO configs
+f"""## Run -- Tasks 1, 2, 3 on the public test (328 samples), few-shot + compile_log + test_report
 
-Runs **both** `--fewshot` (static hand-picked real exemplars) and `--rag` (retrieval from
-the real + synthetic pool) back to back, so the two can be compared directly on the
-leaderboard instead of guessing from one run. Both now also get the **real compile_log**
-(see `compile_check.py`): the released data leaves it empty, so the model previously had
-to guess compilability purely by reading code and was wrong ~20-25% of the time even on
-code that compiles -- confirmed the actual cause of Task 1's negative QWK, not RAG vs.
-few-shot (which scored almost identically, -0.2171 vs -0.2108, before this fix).
-
-`--rag` had anchored Task 2 hard toward single-label outputs last time (every synthetic
-exemplar has exactly one injected bug), so it's still a real risk for that task
-specifically -- that's exactly what running both configs side by side is for.
-
-Each config runs across **both GPUs in parallel** (`--num-shards 2`, one process per GPU
-via `CUDA_VISIBLE_DEVICES`, merged by `merge_shards.py`). **Needs the kernel's accelerator
-set to "GPU T4 x2"** in the Kaggle notebook editor (Settings -> Accelerator) -- not
-exposed through the push API, so it has to be set once by hand and then persists across
-future `kaggle kernels push` updates."""
+One process per GPU (`--num-shards 2`), merged by `merge_shards.py`. Each step uses
+`subprocess.run(check=True)` -- a failing `!python ...` does NOT stop a notebook."""
 ))
 
 cells.append(new_code_cell(
-"""%cd /kaggle/working/msc/llm/src
+f"""%cd /kaggle/working/msc/llm/src
 import os, subprocess
-
-RUN_TAGS = {"fewshot": "qwen-fewshot", "rag": "qwen-rag"}
-METHOD_FLAGS = {"fewshot": "--fewshot", "rag": "--rag"}
-
-for method, run_tag in RUN_TAGS.items():
-    cmd = lambda shard: [
-        "python", "-u", "run_prompting.py", "--split", "public", "--tasks", "1,2,3",
-        METHOD_FLAGS[method], "--run-tag", run_tag, "--num-shards", "2", "--shard-id", str(shard),
-    ]
-    envs = [{**os.environ, "CUDA_VISIBLE_DEVICES": str(i)} for i in range(2)]
-    procs = [subprocess.Popen(cmd(i), env=envs[i]) for i in range(2)]
-    for p in procs:
-        p.wait()
-    assert all(p.returncode == 0 for p in procs), (method, [p.returncode for p in procs])
-    subprocess.run(
-        ["python", "merge_shards.py", "--split", "public", "--tasks", "1,2,3",
-         "--method-tag", run_tag, "--num-shards", "2"],
-        check=True,
-    )
-    print(f"=== {method} done ===")
-"""
-))
-
-cells.append(new_code_cell(
-"""import glob, re, subprocess, pathlib
-valid_paths = set()
-for path in sorted(glob.glob("../outputs/*/predictions_task*_public.json")):
-    path = str(pathlib.Path(path).resolve())
-    task_num = re.search(r"predictions_task(\\d)_", path).group(1)
-    r = subprocess.run(["python", "validate_submission.py", task_num, path, "--split", "public"])
-    print(path, "-> OK" if r.returncode == 0 else "-> FAIL (will NOT be collected)")
-    if r.returncode == 0:
-        valid_paths.add(path)
+RUN_TAG = "{RUN_TAG}"
+cmd = lambda i: ["python", "-u", "run_prompting.py", "--split", "public", "--tasks", "1,2,3", "--fewshot",
+                 "--run-tag", RUN_TAG, "--num-shards", "2", "--shard-id", str(i)]
+procs = [subprocess.Popen(cmd(i), env={{**os.environ, "CUDA_VISIBLE_DEVICES": str(i)}}) for i in range(2)]
+for p in procs:
+    p.wait()
+assert all(p.returncode == 0 for p in procs), [p.returncode for p in procs]
+subprocess.run(["python", "merge_shards.py", "--split", "public", "--tasks", "1,2,3", "--method-tag", RUN_TAG, "--num-shards", "2"], check=True)
 """
 ))
 
 cells.append(new_markdown_cell(
-"""## Collect submissions + clean up
+"""## Task 3 rules + validation
 
-Each run-tag now writes to its own `outputs/{run_tag}/` folder (one folder per run id,
-instead of flat files disambiguated only by a filename suffix). Copies only the predictions
-files that PASSED validation above into `/kaggle/working/submission/`, under plain
-`predictions_task{N}_{fewshot,rag}.json` names, then deletes the cloned repo -- so the
-notebook's saved output is only that one folder instead of the whole source tree + per-shard
-intermediates. Earlier this silently shipped invalid files regardless of validation result
-(`!python validate_submission.py` doesn't stop the notebook on a non-zero exit code) --
-raises instead now, so a schema violation surfaces as a failed kernel, not a rejected
-Kaggle submission."""
+`postprocess_task3.py`: Level 2 + real compile error -> the g++ error line; Level 1 +
+passes every verified test -> "Tốt.". Then every file must pass `validate_submission.py`,
+or the kernel fails here instead of shipping an invalid file."""
 ))
 
 cells.append(new_code_cell(
-"""import shutil, pathlib
-sub_dir = pathlib.Path("/kaggle/working/submission")
+"""subprocess.run(["python", "postprocess_task3.py", f"../outputs/{RUN_TAG}/predictions_task3_public.json",
+                "--out-tag", f"{RUN_TAG}-rules"], check=True)
+FINAL = {
+    1: f"../outputs/{RUN_TAG}/predictions_task1_public.json",
+    2: f"../outputs/{RUN_TAG}/predictions_task2_public.json",
+    3: f"../outputs/{RUN_TAG}-rules/predictions_task3_public.json",
+}
+for t, path in FINAL.items():
+    subprocess.run(["python", "validate_submission.py", str(t), path, "--split", "public"], check=True)
+"""
+))
+
+cells.append(new_markdown_cell(
+"""## Collect + clean up
+
+Keeps only `/kaggle/working/submission/` and deletes the cloned repo."""
+))
+
+cells.append(new_code_cell(
+"""sub_dir = pathlib.Path("/kaggle/working/submission")
 sub_dir.mkdir(exist_ok=True)
-missing_or_invalid = []
-for method, run_tag in RUN_TAGS.items():
-    for t in (1, 2, 3):
-        src = pathlib.Path(f"/kaggle/working/msc/llm/outputs/{run_tag}/predictions_task{t}_public.json")
-        if str(src.resolve()) in valid_paths:
-            shutil.copy(src, sub_dir / f"predictions_task{t}_{method}.json")
-        else:
-            missing_or_invalid.append(str(src))
+for t, path in FINAL.items():
+    shutil.copy(path, sub_dir / f"predictions_task{t}.json")
+# Task 3 before the rules too, so the rules' effect can be measured on the leaderboard
+shutil.copy(f"../outputs/{RUN_TAG}/predictions_task3_public.json", sub_dir / "predictions_task3_norules.json")
 %cd /kaggle/working
 shutil.rmtree("/kaggle/working/msc", ignore_errors=True)
 print("submission files:", sorted(p.name for p in sub_dir.iterdir()))
-assert not missing_or_invalid, f"did NOT collect (missing or failed validation): {missing_or_invalid}"
 """
 ))
 
-cells.append(new_markdown_cell(
-"""## Output
-
-`/kaggle/working/submission/predictions_task{1,2,3}_{fewshot,rag}.json` -- pick whichever
-config scores better per task directly, already validated against the schema above."""
-))
-
-# Kaggle's papermill execution engine requires kernelspec metadata to even start --
-# without it, the kernel fails immediately with "No kernel name found in notebook"
-# before any cell runs (found this the hard way on the sibling synth-data notebook).
+# Kaggle's papermill engine needs kernelspec metadata or it fails before any cell runs.
 KERNELSPEC_METADATA = {
     "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
     "language_info": {"name": "python", "version": "3"},
