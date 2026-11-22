@@ -38,7 +38,7 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 
 | date | run_id | note | local | sub |
 |---|---|---|---|---|
-| 2026-11-23 | `task2-from-t3-rules` | Task 2 labels = Task 3 self-diagnosis (`qwen7b-fewshot-v2` T3 public) + rules: real g++ fail → add/remove `Lỗi biên dịch`; test_report all-failures-format → add `Lỗi nhập/xuất` (`task2_from_task3.py`, combo `t3+compile+format`) | macro .2782 / micro .5135 (Task 2 prompt alone: .1612 / .4103; Task 2 prompt + rules .2106 / .4533) | not yet |
+| 2026-11-23 | `task2-from-t3-rules` | Task 2 labels = Task 3 self-diagnosis (`qwen7b-fewshot-v2` T3 public) + rules: real g++ fail → add/remove `Lỗi biên dịch`; test_report all-failures-format → add `Lỗi nhập/xuất` (`task2_from_task3.py`, combo `t3+compile+format`) | macro .2782 / micro .5135 (Task 2 prompt alone: .1612 / .4103; Task 2 prompt + rules .2106 / .4533) | **0.1634** (assumed this file; user reported score without naming it) |
 | 2026-11-23 | `task2-union-t3-rules` | same, union of Task 3 + Task 2 (`submission_task2_ensemble`) labels + rules (`union+compile+format`) — more rare labels on public | macro .2820 / micro .4889 | not yet |
 | 2026-11-23 | `ml-task2-logreg` (+ ensembles) | MiniLM embeddings + OvR LogReg on 593 synth + real; **leave-one-out on 32 real** (old .303 CV mixed synth into validation → inflated) | alone .1387 / .2297 · `t3∪ml`+rules .2759 / .3776 · 2-of-3 vote+rules .2539 / .4658 → no-go, doesn't beat t3+rules | — |
 | 2026-11-22 | `qwen7b-fewshot-testreport-sample` vs `qwen7b-fewshot-noreport-sample` (local) | few-shot + compile-only log, with vs without test_report (17/32 items get one) | macro / micro: **with** .1521 / .3896 · **without** .1612 / .4103 → test_report slightly hurts | — |
