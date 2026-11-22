@@ -220,6 +220,7 @@ def main():
     ap.add_argument("--adapter", default=None, help="path to a LoRA adapter on top of --model (e.g. outputs/ft_task3_lora from finetune_task3.py)")
     ap.add_argument("--run-tag", default=None, help="override the auto-derived tag in output filenames (default: <model>[_fewshot|_rag])")
     ap.add_argument("--no-resume", action="store_true", help="ignore any existing checkpoint for this --run-tag and start the run over from scratch (by default, rerunning the same --run-tag resumes from the last completed sample per task)")
+    ap.add_argument("--no-test-report", action="store_true", help="leave test_report empty (ablation: measure what test_report adds)")
     ap.add_argument("--num-shards", type=int, default=1, help="split each task's samples into this many disjoint shards -- for running one shard per GPU in parallel (see merge_shards.py)")
     ap.add_argument("--shard-id", type=int, default=0, help="which shard (0-indexed) this process handles; pair with CUDA_VISIBLE_DEVICES to pin it to one GPU")
     args = ap.parse_args()
@@ -243,10 +244,12 @@ def main():
     print("computing real compile_log + test_report (g++, cached)...")
     for t in task_nums:
         attach_real_compile_log(ds, t)
-        attach_test_report(ds, t)
+        if not args.no_test_report:
+            attach_test_report(ds, t)
         if fewshot_ds is not None:
             attach_real_compile_log(fewshot_ds, t)
-            attach_test_report(fewshot_ds, t)
+            if not args.no_test_report:
+                attach_test_report(fewshot_ds, t)
 
     method_suffix = "_rag" if args.rag else ("_fewshot" if args.fewshot else "")
     method_tag = args.run_tag or short_model_name(args.model) + method_suffix
@@ -271,6 +274,18 @@ def main():
             llm, ds, task_num, log_path, ckpt_path, resume=not args.no_resume,
             fewshot_ds=fewshot_ds, rag_index=rag_index, rag_k=args.rag_k,
         )
+
+        if task_num == 1:
+            # the model occasionally goes past a dimension's max (e.g. logic=5 with range
+            # [0,4]) -> invalid file + total>10. Clamp here, after run_task, so predictions
+            # loaded from a resume checkpoint get it too; total is re-derived from the rubric.
+            ranges = {d["name"]: d["range"] for d in ds.label_space["rubric"]["dimensions"]}
+            for p in predictions:
+                rubric = p["output"]["rubric"]
+                for d, (lo, hi) in ranges.items():
+                    if isinstance(rubric.get(d), (int, float)):
+                        rubric[d] = min(max(rubric[d], lo), hi)
+                p["output"]["total_score"] = sum(rubric.values())
 
         errors = validate_format(task_num, predictions, ds)
         if errors:

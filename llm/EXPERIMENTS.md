@@ -18,7 +18,8 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 
 | date | run_id | note | local | sub |
 |---|---|---|---|---|
-| 2026-11-22 | `qwen7b-fewshot-testreport` (runner v10) | few-shot + compile_log (compile-only) + **test_report** in prompt, then both rules | running | — |
+| 2026-11-22 | `testreport_ablation` (local, 32 items) | A: idea2 prompt + compile-only log, no test_report · B: + test_report (17/32 items, EX02) · A/B + rules 1+2 — `eval_testreport_sample.py` | macro / overlap / compl: **A** .2372 / .1986 / 1.0 · **B** .2190 / .1992 / 1.0 · **A+rules** .2372 / .2599 / 1.0 · **B+rules** .2190 / .2644 / 1.0 → test_report doesn't help labels (−.018 macro); rules give +.06 overlap | — |
+| 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + **test_report** in prompt, then both rules | running | — |
 | 2026-11-22 | `qwen7b-fewshot-v2-rules` | `-compilefix` + rule 2: Level 1 + passes all verified tests → "Tốt.", labels [] (82 samples, 43 changed) | public compliance 1.0 | not yet |
 | 2026-11-22 | `qwen7b-fewshot-v2-compilefix` | `qwen7b-fewshot-v2` + rule 1: Level 2 + real compile error → first g++ error line, + "Lỗi biên dịch" (70 samples). Source line dropped after it caused 4 compliance violations | public compliance 1.0 (0.988 with source line) | **0.30** (uncertain which of the two versions was uploaded) |
 | 2026-11-22 | `ft_task3_lora_qwen2.5-coder-1.5b-instruct` | QLoRA 1.5B, 92 synth samples (7B-written targets), 3 epochs | macro .1114 / overlap .1298 / compl .906* (base 1.5B: .1014 / .0200 / 1.0) | — |
@@ -36,7 +37,8 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 
 | date | run_id | note | local | sub |
 |---|---|---|---|---|
-| 2026-11-22 | `qwen7b-fewshot-testreport` (runner v10) | few-shot + compile_log (compile-only) + test_report | running | — |
+| 2026-11-22 | `qwen7b-fewshot-testreport-sample` vs `qwen7b-fewshot-noreport-sample` (local) | few-shot + compile-only log, with vs without test_report (17/32 items get one) | paused, rerun later | — |
+| 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + test_report | running | — |
 | 2026-11-20 | `submission_task2_ensemble` | `ensemble.py`: zero-shot + `qwen-rag`, label union | — | **0.1289** |
 | 2026-11-19 | `qwen-rag` (runner v8) | RAG exemplars | — | 0.0421 |
 | 2026-11-13 | few-shot (static) | 2 static exemplars | macro .075–.080 | — |
@@ -46,6 +48,7 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 
 | date | run_id | note | local | sub |
 |---|---|---|---|---|
-| 2026-11-22 | `qwen7b-fewshot-testreport` (runner v10) | few-shot + compile_log (compile-only) + test_report | running | — |
+| 2026-11-22 | `qwen7b-fewshot-testreport-sample` vs `qwen7b-fewshot-noreport-sample` (local) | few-shot + compile-only log, with vs without test_report (17/32 items get one) | paused, rerun later | — |
+| 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + test_report | running | — |
 | 2026-11-19 | `qwen-rag` (runner v8) | RAG exemplars, no compile_log | — | -0.2171 |
 | 2026-11-19 | `qwen-fewshot` | static few-shot, no compile_log | — | -0.2108 |
