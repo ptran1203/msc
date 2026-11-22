@@ -14,6 +14,7 @@ from tqdm import tqdm
 from data import REPO_ROOT, load_public_test, load_sample_dataset, read_code
 from eval import task1_metrics, task2_metrics, task3_compliance, task3_overlap_proxy
 from compile_check import attach_real_compile_log
+from test_report import attach_test_report
 from llm_client import LocalLLM, MODEL_NAME, SEED, extract_json
 from prompts import SYSTEM_GRADER, task1_prompt, task2_prompt, task3_prompt
 from rag import RagIndex
@@ -237,11 +238,15 @@ def main():
     # compilability purely by reading code -- measured to be wrong ~20-25% of the time
     # even on code that compiles fine (see METHOD.md). Fill in the real signal via our
     # own g++ compile instead, same oracle principle as the synthetic-data pipeline.
-    print("computing real compile_log (g++, cached)...")
+    # Same idea for test_report: run the code on verified LLM-generated tests (single-
+    # problem exams that have a suite under outputs/llm_tests -- see test_report.py).
+    print("computing real compile_log + test_report (g++, cached)...")
     for t in task_nums:
         attach_real_compile_log(ds, t)
+        attach_test_report(ds, t)
         if fewshot_ds is not None:
             attach_real_compile_log(fewshot_ds, t)
+            attach_test_report(fewshot_ds, t)
 
     method_suffix = "_rag" if args.rag else ("_fewshot" if args.fewshot else "")
     method_tag = args.run_tag or short_model_name(args.model) + method_suffix

@@ -162,6 +162,8 @@ def task3_prompt(ds: Dataset, sample: dict, fewshot_ds: Dataset | None = None, f
         else level
     )
     log = sample["input"].get("compile_log") or "(không có)"
+    report = sample["input"].get("test_report")
+    report_block = f"\n## test_report (chạy code trên test sinh tự động)\n{report}\n" if report else ""
     given_errors = sample["input"].get("taxonomy_error")
 
     reasoning_instr = (
@@ -206,7 +208,7 @@ def task3_prompt(ds: Dataset, sample: dict, fewshot_ds: Dataset | None = None, f
 
 ## compile_log
 {log}
-
+{report_block}
 {diagnosis_block}
 
 ## Mức phản hồi yêu cầu
