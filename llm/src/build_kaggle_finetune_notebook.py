@@ -8,6 +8,8 @@ REPO_URL = "https://github.com/ptran1203/msc.git"
 KAGGLE_USERNAME = "ptran1203"
 DATASET_MOUNT = f"/kaggle/input/datasets/{KAGGLE_USERNAME}/llm-autograding-course-data"
 SYNTH_MOUNT = f"/kaggle/input/notebooks/{KAGGLE_USERNAME}/llm-synth-data-generator/synth_generated"
+PREV_TARGETS_SLUG = "llm-task3-ft-targets"
+PREV_TARGETS = f"/kaggle/input/datasets/{KAGGLE_USERNAME}/{PREV_TARGETS_SLUG}"
 
 cells = []
 
@@ -45,6 +47,7 @@ f"""%cd /kaggle/working
 cells.append(new_code_cell(
 f"""import shutil, pathlib, json
 repo_llm = pathlib.Path("/kaggle/working/msc/llm")
+PREV_TARGETS = "{PREV_TARGETS}"  # optional dataset with targets from an earlier run
 shutil.copytree("{DATASET_MOUNT}/data", repo_llm / "data")
 (repo_llm / "synth").mkdir(exist_ok=True)
 shutil.copytree("{SYNTH_MOUNT}", repo_llm / "synth" / "generated")
@@ -74,12 +77,24 @@ deleted afterwards so they don't end up in the real training set."""
 cells.append(new_code_cell(
 """%cd /kaggle/working/msc/llm/src
 import os, subprocess, glob
-!CUDA_VISIBLE_DEVICES=0 python -u finetune_task3.py gen-targets --limit 2
-!cat ../synth/generated/task3_ft_targets_shard0.jsonl
-!CUDA_VISIBLE_DEVICES=0 python -u finetune_task3.py train --max-steps 2
+
+def step(*args, gpu=0):
+    # check=True: a failing `!python ...` does NOT stop a notebook, which once let a
+    # broken train step slip past the smoke test and fail only hours later
+    subprocess.run(["python", "-u", "finetune_task3.py", *args], env={**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu)}, check=True)
+
+step("gen-targets", "--limit", "2")
+print(open("../synth/generated/task3_ft_targets_shard0.jsonl", encoding="utf-8").read())
+step("train", "--max-steps", "2")
 for p in glob.glob("../synth/generated/task3_ft_targets_shard*.jsonl"):
     os.remove(p)
 shutil.rmtree("../outputs/ft_task3_lora", ignore_errors=True)
+
+# targets from an earlier run (private dataset), if attached -- gen-targets skips any
+# sample_id already in its shard file, so only the missing ones get regenerated
+for p in glob.glob(f"{PREV_TARGETS}/task3_ft_targets_shard*.jsonl"):
+    shutil.copy(p, "../synth/generated/")
+    print("reusing", p)
 """
 ))
 
@@ -93,7 +108,8 @@ procs = [subprocess.Popen(cmd(i), env={**os.environ, "CUDA_VISIBLE_DEVICES": str
 for p in procs:
     p.wait()
 assert all(p.returncode == 0 for p in procs), [p.returncode for p in procs]
-!wc -l ../synth/generated/task3_ft_targets_shard*.jsonl
+for p in sorted(glob.glob("../synth/generated/task3_ft_targets_shard*.jsonl")):
+    print(p, sum(1 for _ in open(p, encoding="utf-8")), "targets")
 # 14B weights (~30GB) aren't needed anymore -- free the disk before the 7B download
 shutil.rmtree(os.path.expanduser("~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-14B-Instruct"), ignore_errors=True)
 """
@@ -102,7 +118,7 @@ shutil.rmtree(os.path.expanduser("~/.cache/huggingface/hub/models--Qwen--Qwen2.5
 cells.append(new_markdown_cell("## 2. QLoRA train the 7B (single GPU)"))
 
 cells.append(new_code_cell(
-"""!CUDA_VISIBLE_DEVICES=0 python -u finetune_task3.py train
+"""step("train")
 """
 ))
 

@@ -38,6 +38,10 @@ EXAM_TO_PROBLEM = {
     "SYN-BINSEARCH": "binary_search", "SYN-PALINDROME": "palindrome_check",
 }
 LEVEL1_BUGGY = ["Chưa đúng, em xem lại.", "Code chưa đúng, em kiểm tra lại.", "Bài chưa đạt, em xem lại nhé."]
+# style_error code runs correctly by construction (oracle-verified), but the 7B teacher
+# invented logic bugs for it -- so its Level 2/3 are templated too, never LLM-written.
+STYLE_L2 = "Code chạy đúng nhưng tên biến khó hiểu, trình bày rối."
+STYLE_L3 = "Code chạy đúng; em đặt tên biến rõ nghĩa và tách mỗi lệnh một dòng cho dễ đọc."
 MAX_TRAIN_TOKENS = 2048
 
 # Style rules distilled from the 32 gold feedbacks, restated as patterns rather than
@@ -114,9 +118,29 @@ Trả lời CHỈ một JSON object:
 """
 
 
-def gen_targets(teacher: str, num_shards: int, shard_id: int, limit=None):
+def adapter_dir(model: str):
+    # 7B keeps the plain path the Kaggle notebook expects; other students get their own
+    if model == MODEL_NAME:
+        return ADAPTER_DIR
+    return REPO_ROOT / f"outputs/ft_task3_lora_{model.split('/')[-1].lower()}"
+
+
+def stratified(samples, per_bug: int):
+    """First `per_bug` samples of every (exam, bug type) cell -- a small subset that
+    still covers all 5 problems x 10 bug types, for quick local checks."""
+    counts, picked = {}, []
+    for s in samples:
+        key = (s["input"]["exam_id"], parse_bug_id(s))
+        if counts.get(key, 0) < per_bug:
+            counts[key] = counts.get(key, 0) + 1
+            picked.append(s)
+    return picked
+
+
+def gen_targets(teacher: str, num_shards: int, shard_id: int, limit=None, per_bug=None):
     ds = load_synth_task3()
-    samples = ds.tasks[3][:limit] if limit else ds.tasks[3]
+    samples = stratified(ds.tasks[3], per_bug) if per_bug else ds.tasks[3]
+    samples = samples[:limit] if limit else samples
     samples = samples[shard_id::num_shards]
     out_path = SYNTH_DIR / f"task3_ft_targets_shard{shard_id}.jsonl"
     done = set()
@@ -136,7 +160,10 @@ def gen_targets(teacher: str, num_shards: int, shard_id: int, limit=None):
                 continue
             level1 = "Tốt." if bug_id == "style_error" else random.Random(s["sample_id"]).choice(LEVEL1_BUGGY)
             level2 = first_compile_error(s["input"]["compile_log"]) if bug_id == "compile_error" else parsed["level2"]
-            row = {"sample_id": s["sample_id"], "reasoning": parsed["reasoning"], "level1": level1, "level2": level2, "level3": parsed["level3"]}
+            level3 = parsed["level3"]
+            if bug_id == "style_error":
+                level2, level3 = STYLE_L2, STYLE_L3
+            row = {"sample_id": s["sample_id"], "reasoning": parsed["reasoning"], "level1": level1, "level2": level2, "level3": level3}
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
             f.flush()
             print(f"[{i + 1}/{len(samples)}] {s['sample_id']} | L2: {level2[:70]} | L3: {parsed['level3'][:70]}", flush=True)
@@ -161,16 +188,20 @@ def build_train_examples():
     return examples
 
 
-def train(epochs: float, lr: float, max_steps: int):
+def train(model_name: str, epochs: float, lr: float, max_steps: int):
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, Trainer, TrainingArguments
 
     use_bf16 = torch.cuda.is_bf16_supported()  # False on Kaggle T4 -> fp16
-    tok = AutoTokenizer.from_pretrained(MODEL_NAME)
+    out_dir = adapter_dir(model_name)
+    tok = AutoTokenizer.from_pretrained(model_name)
     rows, n_too_long = [], 0
     for prompt, target in build_train_examples():
         msgs = [{"role": "system", "content": P.SYSTEM_GRADER}, {"role": "user", "content": prompt}]
-        prompt_ids = tok.apply_chat_template(msgs, add_generation_prompt=True, tokenize=True)
+        # render to text then tokenize: apply_chat_template(tokenize=True) returns a list on
+        # transformers 4.x but a BatchEncoding on newer versions (Kaggle)
+        prompt_text = tok.apply_chat_template(msgs, add_generation_prompt=True, tokenize=False)
+        prompt_ids = tok(prompt_text, add_special_tokens=False)["input_ids"]
         target_ids = tok(target + tok.eos_token, add_special_tokens=False)["input_ids"]
         if len(prompt_ids) + len(target_ids) > MAX_TRAIN_TOKENS:
             n_too_long += 1
@@ -191,7 +222,7 @@ def train(epochs: float, lr: float, max_steps: int):
 
     compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
     model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME, device_map={"": 0}, torch_dtype=compute_dtype,
+        model_name, device_map={"": 0}, torch_dtype=compute_dtype,
         quantization_config=BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=compute_dtype),
     )
     model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
@@ -202,22 +233,24 @@ def train(epochs: float, lr: float, max_steps: int):
     model.print_trainable_parameters()
 
     args = TrainingArguments(
-        output_dir=str(ADAPTER_DIR / "checkpoints"), per_device_train_batch_size=1, gradient_accumulation_steps=8,
+        output_dir=str(out_dir / "checkpoints"), per_device_train_batch_size=1, gradient_accumulation_steps=8,
         num_train_epochs=epochs, max_steps=max_steps, learning_rate=lr, lr_scheduler_type="cosine", warmup_ratio=0.05,
         bf16=use_bf16, fp16=not use_bf16, logging_steps=5, save_strategy="no", report_to=[], seed=SEED,
         gradient_checkpointing=True, gradient_checkpointing_kwargs={"use_reentrant": False},
     )
     Trainer(model=model, args=args, train_dataset=rows, data_collator=collate).train()
-    model.save_pretrained(ADAPTER_DIR)
-    print(f"saved adapter -> {ADAPTER_DIR}")
+    model.save_pretrained(out_dir)
+    print(f"saved adapter -> {out_dir}")
 
 
-def evaluate(base: bool):
+def evaluate(model_name: str, base: bool):
     ds = load_sample_dataset()
     attach_real_compile_log(ds, 3)
     valid_labels = set(ds.label_space["taxonomy_error"])
-    llm = LocalLLM(adapter=None if base else str(ADAPTER_DIR))
+    llm = LocalLLM(model_name=model_name, adapter=None if base else str(adapter_dir(model_name)))
     name = "base_zeroshot" if base else "finetuned"
+    if model_name != MODEL_NAME:
+        name += "_" + model_name.split("/")[-1].lower()
     EVAL_DIR.mkdir(parents=True, exist_ok=True)
     records = []
     for i, s in enumerate(ds.tasks[3]):
@@ -237,14 +270,16 @@ if __name__ == "__main__":
     ap.add_argument("--num-shards", type=int, default=1, help="gen-targets: split samples across processes/GPUs")
     ap.add_argument("--shard-id", type=int, default=0)
     ap.add_argument("--limit", type=int, default=None, help="gen-targets: only first N synth samples")
+    ap.add_argument("--per-bug", type=int, default=None, help="gen-targets: only N samples per (problem, bug type) -- quick local subset")
+    ap.add_argument("--model", default=MODEL_NAME, help="train/eval: student model (adapter saved per model)")
     ap.add_argument("--epochs", type=float, default=1.0)
     ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--max-steps", type=int, default=-1, help="train: stop after N optimizer steps (smoke test)")
     ap.add_argument("--base", action="store_true", help="eval: no adapter, same prompt")
     args = ap.parse_args()
     if args.step == "gen-targets":
-        gen_targets(args.teacher, args.num_shards, args.shard_id, args.limit)
+        gen_targets(args.teacher, args.num_shards, args.shard_id, args.limit, args.per_bug)
     elif args.step == "train":
-        train(args.epochs, args.lr, args.max_steps)
+        train(args.model, args.epochs, args.lr, args.max_steps)
     else:
-        evaluate(args.base)
+        evaluate(args.model, args.base)
