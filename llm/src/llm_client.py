@@ -81,6 +81,8 @@ class LocalLLM:
             )
         new_tokens = out[0][inputs["input_ids"].shape[1]:]
         decoded = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
+        if self.thinking:  # long, varying-length generations grew the cache to 12.1GB (WDDM cliff)
+            torch.cuda.empty_cache()
         if not return_finished:
             return decoded
         # finished = stopped on an end token before the budget ran out

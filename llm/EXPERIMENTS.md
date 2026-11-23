@@ -68,3 +68,4 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 | 2026-11-19 | `qwen-fewshot` | static few-shot, no compile_log | — | -0.2108 |
 | 2026-11-23 | `qwen2.5-coder-7b-instruct-ft-task3` (Colab) | QLoRA 7B on 588 14B targets, 1 level/sample (~74 steps), ckpt every 10 steps + adapter/eval/preds on Google Drive (`colab/colab_finetune_*.ipynb`); Kaggle dropped (weekly GPU quota) | pending | — |
 | 2026-11-23 | `cot-qwen3-8b-thinking` (local 3060) | CoT prompting track: Qwen3-8B thinking mode, Task 3 test_report ablation (A/B ± rules) on the 32 sample items | running | — |
+| 2026-11-23 | `qwen3-8b-thinking-fewshot` (Task 2, sample, local 3060) | CoT: Qwen3-8B thinking (budget 1024 + forced close), plain Task 2 few-shot prompt + test_report, no Task 3 input; 0/32 parse fail, ~2 min/item (3060, 4-bit) | macro **0.311** alone (7B same prompt .152); +compile/format rules .335; ∪ feat-svc + rules **.340**; 3.0 labels/item vs gold 1.28 | — |

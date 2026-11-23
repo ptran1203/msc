@@ -89,7 +89,10 @@ def run_task(llm, ds, task_num, log_path, ckpt_path, resume=True, fewshot_ds=Non
             for line in f:
                 line = line.strip()
                 if line:
-                    entry = json.loads(line)
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:  # half-written line from a Ctrl+C -> that item is redone
+                        continue
                     done[entry["sample_id"]] = entry
     remaining = [s for s in samples if s["sample_id"] not in done]
     if done:
