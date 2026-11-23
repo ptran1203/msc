@@ -18,6 +18,8 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 
 | date | run_id | note | local | sub |
 |---|---|---|---|---|
+| 2026-11-23 | `ft_task3_lora` v6 (Kaggle) | QLoRA Qwen2.5-Coder-7B on v5's 588 14B targets, **one level per sample** (rotated: 196/level, 588 examples ≈ 74 steps ≈ 4h on T4), checkpoints every 20 steps; then eval (32 gold) + public Task 3 | running | — |
+| 2026-11-23 | `ft_task3_lora` v5 (Kaggle) | 14B targets for 593 synth (588 ok, 3.5h) → QLoRA 7B on all 3 levels (1764 examples) | **hit 12h limit** at train step 156/221 (~196 s/step on T4), no checkpoints → training lost; targets kept (dataset `llm-task3-ft-targets`) | — |
 | 2026-11-23 | `qwen7b-fewshot-testreport` (runner v12 shard 0 + v11 shard 1) → `qwen7b-fewshot-testreport-rules` | merged locally; rules: 70 L2 compile quotes, 82 L1 pass-all (25 changed). All 3 files validated | local (32 items, same config): see ablation rows | not yet |
 | 2026-11-22 | `qwen3-8b-thinking` testreport ablation (Colab T4) | same as `testreport_ablation` but **Qwen3-8B, thinking mode** (`eval_testreport_sample.py --model Qwen/Qwen3-8B --thinking`) | running | — |
 | 2026-11-22 | `testreport_ablation` (local, 32 items) | A: idea2 prompt + compile-only log, no test_report · B: + test_report (17/32 items, EX02) · A/B + rules 1+2 — `eval_testreport_sample.py` | macro / overlap / compl: **A** .2372 / .1986 / 1.0 · **B** .2190 / .1992 / 1.0 · **A+rules** .2372 / .2599 / 1.0 · **B+rules** .2190 / .2644 / 1.0 → test_report doesn't help labels (−.018 macro); rules give +.06 overlap | — |
