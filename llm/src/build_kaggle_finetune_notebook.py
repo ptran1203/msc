@@ -92,7 +92,8 @@ shutil.rmtree("../outputs/ft_task3_lora", ignore_errors=True)
 
 # targets from an earlier run (private dataset), if attached -- gen-targets skips any
 # sample_id already in its shard file, so only the missing ones get regenerated
-for p in glob.glob(f"{PREV_TARGETS}/task3_ft_targets_shard*.jsonl"):
+# (mount path varies between /kaggle/input/<slug> and /kaggle/input/datasets/<user>/<slug>)
+for p in [q for q in glob.glob("/kaggle/input/**/task3_ft_targets_shard*.jsonl", recursive=True) if "llm-task3-ft-targets" in q]:
     shutil.copy(p, "../synth/generated/")
     print("reusing", p)
 """
@@ -101,13 +102,17 @@ for p in glob.glob(f"{PREV_TARGETS}/task3_ft_targets_shard*.jsonl"):
 cells.append(new_markdown_cell("## 1. Generate targets -- one 14B teacher per GPU"))
 
 cells.append(new_code_cell(
-"""from huggingface_hub import snapshot_download
-snapshot_download("Qwen/Qwen2.5-Coder-14B-Instruct")  # once, so the 2 shards don't race on the cache
-cmd = lambda i: ["python", "-u", "finetune_task3.py", "gen-targets", "--num-shards", "2", "--shard-id", str(i)]
-procs = [subprocess.Popen(cmd(i), env={**os.environ, "CUDA_VISIBLE_DEVICES": str(i)}) for i in range(2)]
-for p in procs:
-    p.wait()
-assert all(p.returncode == 0 for p in procs), [p.returncode for p in procs]
+"""n_have = sum(sum(1 for _ in open(p, encoding="utf-8")) for p in glob.glob("../synth/generated/task3_ft_targets_shard*.jsonl"))
+if n_have >= 580:  # reused from PREV_TARGETS (588 in v5; a few unparseable are skipped for good)
+    print(f"{n_have} targets already present -- skipping 14B generation")
+else:
+    from huggingface_hub import snapshot_download
+    snapshot_download("Qwen/Qwen2.5-Coder-14B-Instruct")  # once, so the 2 shards don't race on the cache
+    cmd = lambda i: ["python", "-u", "finetune_task3.py", "gen-targets", "--num-shards", "2", "--shard-id", str(i)]
+    procs = [subprocess.Popen(cmd(i), env={**os.environ, "CUDA_VISIBLE_DEVICES": str(i)}) for i in range(2)]
+    for p in procs:
+        p.wait()
+    assert all(p.returncode == 0 for p in procs), [p.returncode for p in procs]
 for p in sorted(glob.glob("../synth/generated/task3_ft_targets_shard*.jsonl")):
     print(p, sum(1 for _ in open(p, encoding="utf-8")), "targets")
 # 14B weights (~30GB) aren't needed anymore -- free the disk before the 7B download
@@ -115,10 +120,12 @@ shutil.rmtree(os.path.expanduser("~/.cache/huggingface/hub/models--Qwen--Qwen2.5
 """
 ))
 
-cells.append(new_markdown_cell("## 2. QLoRA train the 7B (single GPU)"))
+cells.append(new_markdown_cell("## 2. QLoRA train the 7B (single GPU), one feedback level per synth sample"))
 
 cells.append(new_code_cell(
-"""step("train")
+"""# one level per synth sample (rotated, balanced): 588 examples ~ 74 steps ~ 4h on a T4.
+# All 3 levels (1764) took 12h/epoch in v5 and hit the session limit. Checkpoints every 20 steps.
+step("train", "--levels-per-sample", "1")
 """
 ))
 

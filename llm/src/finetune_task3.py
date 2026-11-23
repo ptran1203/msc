@@ -160,7 +160,9 @@ def gen_targets(teacher: str, num_shards: int, shard_id: int, limit=None, per_bu
     print(f"shard {shard_id} done, {n_fail} unparseable skipped -> {out_path}")
 
 
-def build_train_examples():
+def build_train_examples(levels_per_sample: int = 3):
+    """levels_per_sample=1: each sample contributes ONE level, rotated by position so the 3
+    levels stay balanced -- 1/3 of the examples (v5: 3 levels x 588 took 12h/epoch on a T4)."""
     ds = load_synth_task3()
     by_id = {s["sample_id"]: s for s in ds.tasks[3]}
     examples = []
@@ -168,7 +170,11 @@ def build_train_examples():
         for line in path.read_text(encoding="utf-8").splitlines():
             t = json.loads(line)
             s = by_id[t["sample_id"]]
-            for level, key in zip(LEVELS, ("level1", "level2", "level3")):
+            pairs = list(zip(LEVELS, ("level1", "level2", "level3")))
+            if levels_per_sample < 3:
+                k = len(examples) // max(levels_per_sample, 1)
+                pairs = [pairs[(k + j) % 3] for j in range(levels_per_sample)]
+            for level, key in pairs:
                 # Same prompt the model sees at eval/inference: self-diagnose branch, no
                 # exemplars, taxonomy_error hidden (build_self_diagnose_prompt never reads it).
                 sample = {"sample_id": s["sample_id"], "input": dict(s["input"], target_feedback_level=level)}
@@ -178,7 +184,7 @@ def build_train_examples():
     return examples
 
 
-def train(model_name: str, epochs: float, lr: float, max_steps: int):
+def train(model_name: str, epochs: float, lr: float, max_steps: int, levels_per_sample: int = 3):
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, Trainer, TrainingArguments
 
@@ -186,7 +192,7 @@ def train(model_name: str, epochs: float, lr: float, max_steps: int):
     out_dir = adapter_dir(model_name)
     tok = AutoTokenizer.from_pretrained(model_name)
     rows, n_too_long = [], 0
-    for prompt, target in build_train_examples():
+    for prompt, target in build_train_examples(levels_per_sample):
         msgs = [{"role": "system", "content": P.SYSTEM_GRADER}, {"role": "user", "content": prompt}]
         # render to text then tokenize: apply_chat_template(tokenize=True) returns a list on
         # transformers 4.x but a BatchEncoding on newer versions (Kaggle)
@@ -228,7 +234,9 @@ def train(model_name: str, epochs: float, lr: float, max_steps: int):
         output_dir=str(out_dir / "checkpoints"), per_device_train_batch_size=1, gradient_accumulation_steps=grad_accum,
         num_train_epochs=epochs, max_steps=max_steps, learning_rate=lr, lr_scheduler_type="cosine",
         warmup_steps=max(1, int(0.05 * total_steps)),  # warmup_ratio was removed in transformers v5
-        bf16=use_bf16, fp16=not use_bf16, logging_steps=5, save_strategy="no", report_to=[], seed=SEED,
+        bf16=use_bf16, fp16=not use_bf16, logging_steps=5, report_to=[], seed=SEED,
+        # checkpoints so a Kaggle 12h timeout doesn't lose the run (v5 lost 8.5h of training)
+        save_strategy="steps", save_steps=20, save_total_limit=2,
         gradient_checkpointing=True, gradient_checkpointing_kwargs={"use_reentrant": False},
     )
     Trainer(model=model, args=args, train_dataset=rows, data_collator=collate).train()
@@ -267,12 +275,13 @@ if __name__ == "__main__":
     ap.add_argument("--model", default=MODEL_NAME, help="train/eval: student model (adapter saved per model)")
     ap.add_argument("--epochs", type=float, default=1.0)
     ap.add_argument("--lr", type=float, default=2e-4)
+    ap.add_argument("--levels-per-sample", type=int, default=3, choices=[1, 2, 3], help="train: feedback levels per synth sample (1 = rotate, 1/3 the examples)")
     ap.add_argument("--max-steps", type=int, default=-1, help="train: stop after N optimizer steps (smoke test)")
     ap.add_argument("--base", action="store_true", help="eval: no adapter, same prompt")
     args = ap.parse_args()
     if args.step == "gen-targets":
         gen_targets(args.teacher, args.num_shards, args.shard_id, args.limit, args.per_bug)
     elif args.step == "train":
-        train(args.model, args.epochs, args.lr, args.max_steps)
+        train(args.model, args.epochs, args.lr, args.max_steps, args.levels_per_sample)
     else:
         evaluate(args.model, args.base)
