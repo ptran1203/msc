@@ -23,6 +23,7 @@ import json
 import re
 
 from compile_check import attach_real_compile_log
+from test_report import attach_test_report
 from data import REPO_ROOT, load_public_test, load_sample_dataset, read_code
 from eval import task1_metrics
 from llm_client import LocalLLM, extract_json
@@ -102,6 +103,27 @@ def compile_rule(inp: dict, rubric: dict | None) -> dict | None:
     return zero
 
 
+def test_rule(inp: dict) -> dict | None:
+    """Single-problem rubric from verified test outcomes, mirroring the teacher's pattern on
+    the sample (EX02): all pass -> 10; only format failures -> 9 (io_format 0); some pass +
+    some wrong -> 7 (logic 2, edge 1); nothing passes -> 2 (logic/edge/io 0). None = no
+    report or no-code / no-compile (handled elsewhere)."""
+    rep = inp.get("test_report") or ""
+    m = re.search(r"đúng (\d+)/(\d+)\.", rep)
+    if inp["exam_type"] != "single_problem" or not m:
+        return None
+    ok, n = int(m.group(1)), int(m.group(2))
+    fmt = sum(int(x) for x in re.findall(r"- (\d+) test: nội dung đúng nhưng SAI ĐỊNH DẠNG", rep))
+    full = {"compilable": 1, "io_format": 1, "logic": 4, "edge_case": 2, "complexity": 1, "code_quality": 1}
+    if ok == n:
+        return full
+    if ok + fmt == n:
+        return dict(full, io_format=0)
+    if ok > 0:
+        return dict(full, logic=2, edge_case=1)
+    return dict(full, io_format=0, logic=0, edge_case=0)
+
+
 def score_multi(ds, items, ckpt_path):
     llm = None  # loaded on first item that needs it (fully checkpointed runs never load it)
     dims = ds.label_space["rubric"]["dimensions"]
@@ -135,10 +157,12 @@ def main():
     ap.add_argument("--split", choices=["sample", "public"], required=True)
     ap.add_argument("--base", help="public: Task 1 file whose single-problem predictions are kept")
     ap.add_argument("--out-tag", default="task1-multi-v3")
+    ap.add_argument("--single-test-rule", action="store_true", help="single-problem items with a test_report: rubric from test outcomes (test_rule)")
     args = ap.parse_args()
 
     ds = load_sample_dataset() if args.split == "sample" else load_public_test()
     attach_real_compile_log(ds, 1)
+    attach_test_report(ds, 1)
     multi = [s for s in ds.tasks[1] if s["input"]["exam_type"] == "multi_problem"]
     run_dir = OUT / args.out_tag
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -158,7 +182,11 @@ def main():
     out = []
     for s in ds.tasks[1]:
         sid = s["sample_id"]
-        rubric = multi_pred[sid] if sid in multi_pred else compile_rule(s["input"], base[sid]["rubric"])
+        if sid in multi_pred:
+            rubric = multi_pred[sid]
+        else:
+            ruled = test_rule(s["input"]) if args.single_test_rule else None
+            rubric = compile_rule(s["input"], ruled or base[sid]["rubric"])
         out.append({"sample_id": sid, "output": {"rubric": rubric, "total_score": sum(rubric.values())}})
     path = run_dir / "predictions_task1_public.json"
     path.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
