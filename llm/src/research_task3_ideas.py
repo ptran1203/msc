@@ -118,12 +118,29 @@ def sanitize(parsed, valid_labels):
 
 def run_variant(name, llm, ds, valid_labels, prompt_fn):
     """prompt_fn(sample) -> prompt string. Runs greedy over all task3 samples."""
-    records = []
-    for sample in ds.tasks[3]:
-        prompt = prompt_fn(sample)
-        raw = llm.generate(P.SYSTEM_GRADER, prompt, max_new_tokens=700)
-        parsed = sanitize(extract_json(raw), valid_labels)
-        records.append({"sample_id": sample["sample_id"], "pred_labels": parsed["taxonomy_error"], "pred_feedback": parsed["feedback"]})
+    # per-item checkpoint: a stopped run (Ctrl+C) resumes where it left off
+    ckpt = OUT_DIR / f"{name}.ckpt.jsonl"
+    done = {}
+    if ckpt.exists():
+        for line in ckpt.read_text(encoding="utf-8").splitlines():
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:  # half-written line -> that item is redone
+                continue
+            done[r["sample_id"]] = r
+    with open(ckpt, "a", encoding="utf-8") as ck:
+        for sample in ds.tasks[3]:
+            if sample["sample_id"] in done:
+                continue
+            prompt = prompt_fn(sample)
+            raw = llm.generate(P.SYSTEM_GRADER, prompt, max_new_tokens=700)
+            parsed = sanitize(extract_json(raw), valid_labels)
+            r = {"sample_id": sample["sample_id"], "pred_labels": parsed["taxonomy_error"], "pred_feedback": parsed["feedback"]}
+            done[r["sample_id"]] = r
+            ck.write(json.dumps(r, ensure_ascii=False) + "\n")
+            ck.flush()
+            print(f"  [{name}] {len(done)}/{len(ds.tasks[3])} {r['sample_id']}", flush=True)
+    records = [done[s["sample_id"]] for s in ds.tasks[3]]
     (OUT_DIR / f"{name}.json").write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
     return records
 

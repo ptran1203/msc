@@ -60,6 +60,8 @@ def apply_rules(labels: list, inp: dict, rules: set) -> list:
 def combine(t2: list, t3: list, how: str, ml: list | None = None) -> list:
     if how == "t3|ml":
         return list(dict.fromkeys(t3 + ml))
+    if how == "t2|ml":  # no Task 3 involved: Task 2 prompt labels + classifier
+        return list(dict.fromkeys(t2 + ml))
     if how == "vote":  # label kept if >=2 of the 3 sources (t2, t3, ml) predict it
         return [l for l in dict.fromkeys(t3 + t2 + ml) if (l in t2) + (l in t3) + (l in ml) >= 2]
     if how == "t2":
@@ -74,7 +76,7 @@ def combine(t2: list, t3: list, how: str, ml: list | None = None) -> list:
 
 
 COMBOS = {f"{how}{'+' + '+'.join(r) if r else ''}": (how, set(r))
-          for how in ("t2", "t3", "union", "intersect", "t3|ml", "vote")
+          for how in ("t2", "t3", "union", "intersect", "t3|ml", "t2|ml", "vote")
           for r in ((), ("compile",), ("format",), ("compile", "format"))}
 
 
@@ -102,7 +104,7 @@ def cmd_eval(args):
     print(f"{'combo':<26} {'macro_f1':>9} {'micro_f1':>9}")
     rows = []
     for combo in COMBOS:
-        if ml is None and COMBOS[combo][0] in ("t3|ml", "vote"):
+        if ml is None and COMBOS[combo][0] in ("t3|ml", "t2|ml", "vote"):
             continue
         pred = predict(ds, t2, t3, combo, ml)
         m = task2_metrics(ds.tasks[2], pred, label_space)
@@ -114,7 +116,7 @@ def cmd_eval(args):
 
 def cmd_build(args):
     ds = prep(load_public_test())
-    pred = predict(ds, load_labels(args.t2), load_labels(args.t3), args.combo, load_labels(args.ml) if args.ml else None)
+    pred = predict(ds, load_labels(args.t2), load_labels(args.t3) if args.t3 else {}, args.combo, load_labels(args.ml) if args.ml else None)
     out = [{"sample_id": s["sample_id"], "output": {"taxonomy_error": pred[s["sample_id"]]}} for s in ds.tasks[2]]
     path = OUT / args.out_tag / "predictions_task2_public.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -132,7 +134,7 @@ if __name__ == "__main__":
     b = sub.add_parser("build")
     b.add_argument("--ml", default=None)
     b.add_argument("--t2", required=True)
-    b.add_argument("--t3", required=True)
+    b.add_argument("--t3", default=None, help="not needed for t2 / t2|ml combos")
     b.add_argument("--combo", required=True, choices=list(COMBOS))
     b.add_argument("--out-tag", required=True)
     args = ap.parse_args()
