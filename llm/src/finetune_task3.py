@@ -236,10 +236,14 @@ def train(model_name: str, epochs: float, lr: float, max_steps: int, levels_per_
         warmup_steps=max(1, int(0.05 * total_steps)),  # warmup_ratio was removed in transformers v5
         bf16=use_bf16, fp16=not use_bf16, logging_steps=5, report_to=[], seed=SEED,
         # checkpoints so a Kaggle 12h timeout doesn't lose the run (v5 lost 8.5h of training)
-        save_strategy="steps", save_steps=20, save_total_limit=2,
+        save_strategy="steps", save_steps=10, save_total_limit=2,
         gradient_checkpointing=True, gradient_checkpointing_kwargs={"use_reentrant": False},
     )
-    Trainer(model=model, args=args, train_dataset=rows, data_collator=collate).train()
+    # resume after a Colab disconnect (checkpoints live on Google Drive there)
+    resume = any((out_dir / "checkpoints").glob("checkpoint-*"))
+    if resume:
+        print("resuming from the last checkpoint in", out_dir / "checkpoints")
+    Trainer(model=model, args=args, train_dataset=rows, data_collator=collate).train(resume_from_checkpoint=resume or None)
     model.save_pretrained(out_dir)
     print(f"saved adapter -> {out_dir}")
 

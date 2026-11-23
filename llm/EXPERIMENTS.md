@@ -66,3 +66,5 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 | 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + test_report | failed (see Task 3 row); shard 1 recovered | — |
 | 2026-11-19 | `qwen-rag` (runner v8) | RAG exemplars, no compile_log | — | -0.2171 |
 | 2026-11-19 | `qwen-fewshot` | static few-shot, no compile_log | — | -0.2108 |
+| 2026-11-23 | `qwen2.5-coder-7b-instruct-ft-task3` (Colab) | QLoRA 7B on 588 14B targets, 1 level/sample (~74 steps), ckpt every 10 steps + adapter/eval/preds on Google Drive (`colab/colab_finetune_*.ipynb`); Kaggle dropped (weekly GPU quota) | pending | — |
+| 2026-11-23 | `cot-qwen3-8b-thinking` (local 3060) | CoT prompting track: Qwen3-8B thinking mode, Task 3 test_report ablation (A/B ± rules) on the 32 sample items | running | — |
