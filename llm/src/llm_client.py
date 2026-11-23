@@ -11,25 +11,29 @@ SEED = 42
 
 class LocalLLM:
     def __init__(self, model_name: str = MODEL_NAME, seed: int = SEED, adapter: str | None = None,
-                 thinking: bool = False, think_budget: int = 1536):
+                 thinking: bool = False, think_budget: int = 1024):
         """thinking=True: Qwen3-style hybrid models think in <think>...</think> before answering
-        (chat template's enable_thinking). think_budget extra new tokens are allowed for it, and
+        (chat template's enable_thinking). thinking is capped at think_budget tokens (budget forcing, see generate), and
         the think block is stripped from the returned text so callers parse only the answer."""
         torch.manual_seed(seed)
         self.model_name = model_name
         self.thinking = thinking
         self.think_budget = think_budget
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        # T4 (Kaggle) has no native bf16 -- fp16 there, bf16 on Ampere+ (local 3060)
+        compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
         quant_config = BitsAndBytesConfig(
             load_in_4bit=True,
-            # T4 (Kaggle) has no native bf16 -- fp16 there, bf16 on Ampere+ (local 3060)
-            bnb_4bit_compute_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
+            bnb_4bit_compute_dtype=compute_dtype,
             bnb_4bit_quant_type="nf4",
         )
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             quantization_config=quant_config,
             device_map="auto",
+            # unquantized parts (embeddings, lm_head) default to fp32 otherwise: Qwen3-8B's
+            # untied 151k-vocab embed+head alone is ~5GB fp32 -> 12GB total, WDDM spill on the 3060
+            torch_dtype=compute_dtype,
         )
         if adapter:
             from peft import PeftModel
@@ -44,15 +48,27 @@ class LocalLLM:
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
-        template_kwargs = {"enable_thinking": True} if self.thinking else {}
-        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, **template_kwargs)
-        if self.thinking:
-            max_new_tokens += self.think_budget
-            if temperature is None:  # Qwen3 docs: greedy decoding loops in thinking mode -> seeded sampling
-                temperature = 0.6
-        inputs = self.tokenizer(text, return_tensors="pt").to(self.model.device)
+        # explicit both ways: Qwen3's template thinks by default; other templates ignore the kwarg
+        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True,
+                                                  enable_thinking=self.thinking)
+        if self.thinking and temperature is None:  # Qwen3 docs: greedy decoding loops in thinking mode -> seeded sampling
+            temperature = 0.6
         if temperature is not None:
             torch.manual_seed(seed if seed is not None else SEED)
+        if not self.thinking:
+            return self._generate(text, max_new_tokens, temperature)
+        # Budget forcing: think for at most think_budget tokens. Unfinished thinking (Qwen3-8B
+        # rambled >3000 tokens on a multi-problem item) is closed with Qwen's own early-stop
+        # phrase, then the answer gets its full max_new_tokens.
+        gen, finished = self._generate(text, self.think_budget, temperature, return_finished=True)
+        if not finished:
+            if "</think>" not in gen:
+                gen += "\n\nConsidering the limited time by the user, I have to give the solution based on the thinking directly now.\n</think>\n\n"
+            gen += self._generate(text + gen, max_new_tokens, temperature)
+        return gen.rsplit("</think>", 1)[1] if "</think>" in gen else gen
+
+    def _generate(self, text: str, max_new_tokens: int, temperature: float | None, return_finished: bool = False):
+        inputs = self.tokenizer(text, return_tensors="pt", add_special_tokens=False).to(self.model.device)
         with torch.no_grad():
             out = self.model.generate(
                 **inputs,
@@ -61,13 +77,14 @@ class LocalLLM:
                 temperature=temperature,
                 top_p=(0.95 if self.thinking else 0.9) if temperature is not None else None,
                 pad_token_id=self.tokenizer.eos_token_id,
+                **({"top_k": 20} if self.thinking else {}),  # Qwen3 thinking-mode recommendation
             )
         new_tokens = out[0][inputs["input_ids"].shape[1]:]
-        text = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
-        if self.thinking:
-            # answer = everything after the last </think>; no </think> = budget ran out mid-thought
-            text = text.rsplit("</think>", 1)[1] if "</think>" in text else ""
-        return text
+        decoded = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
+        if not return_finished:
+            return decoded
+        # finished = stopped on an end token before the budget ran out
+        return decoded, len(new_tokens) < max_new_tokens
 
 
 def extract_code_block(text: str) -> str | None:

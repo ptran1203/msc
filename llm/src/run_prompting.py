@@ -220,6 +220,7 @@ def main():
     ap.add_argument("--adapter", default=None, help="path to a LoRA adapter on top of --model (e.g. outputs/ft_task3_lora from finetune_task3.py)")
     ap.add_argument("--run-tag", default=None, help="override the auto-derived tag in output filenames (default: <model>[_fewshot|_rag])")
     ap.add_argument("--no-resume", action="store_true", help="ignore any existing checkpoint for this --run-tag and start the run over from scratch (by default, rerunning the same --run-tag resumes from the last completed sample per task)")
+    ap.add_argument("--thinking", action="store_true", help="Qwen3-style thinking mode (CoT in <think>, stripped before parsing; see LocalLLM)")
     ap.add_argument("--no-test-report", action="store_true", help="leave test_report empty (ablation: measure what test_report adds)")
     ap.add_argument("--num-shards", type=int, default=1, help="split each task's samples into this many disjoint shards -- for running one shard per GPU in parallel (see merge_shards.py)")
     ap.add_argument("--shard-id", type=int, default=0, help="which shard (0-indexed) this process handles; pair with CUDA_VISIBLE_DEVICES to pin it to one GPU")
@@ -251,7 +252,7 @@ def main():
             if not args.no_test_report:
                 attach_test_report(fewshot_ds, t)
 
-    method_suffix = "_rag" if args.rag else ("_fewshot" if args.fewshot else "")
+    method_suffix = ("_rag" if args.rag else ("_fewshot" if args.fewshot else "")) + ("_thinking" if args.thinking else "")
     method_tag = args.run_tag or short_model_name(args.model) + method_suffix
     shard_suffix = f"_shard{args.shard_id}of{args.num_shards}" if args.num_shards > 1 else ""
     tag = f"{args.split}{shard_suffix}"
@@ -259,7 +260,7 @@ def main():
     run_dir = OUTPUT_DIR / method_tag
     run_dir.mkdir(parents=True, exist_ok=True)
     print(f"Loading {args.model} (adapter={args.adapter}, seed={SEED}, fewshot={args.fewshot}, run_tag={method_tag})...")
-    llm = LocalLLM(model_name=args.model, adapter=args.adapter)
+    llm = LocalLLM(model_name=args.model, adapter=args.adapter, thinking=args.thinking)
 
     for task_num in task_nums:
         print(f"\n=== Task {task_num} ({method_tag}/{tag}, n={len(ds.tasks[task_num])}) ===")
