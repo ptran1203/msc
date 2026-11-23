@@ -170,7 +170,10 @@ def score_multi(ds, items, ckpt_path, model=MODEL_NAME, thinking=False, anchors=
     done = {}
     if ckpt_path.exists():
         for line in ckpt_path.read_text(encoding="utf-8").splitlines():
-            r = json.loads(line)
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:  # half-written line from a Ctrl+C -> that item is redone
+                continue
             done[r["sample_id"]] = r["rubric"]
     with open(ckpt_path, "a", encoding="utf-8") as ck:
         for i, s in enumerate(items):
