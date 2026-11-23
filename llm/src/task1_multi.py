@@ -102,7 +102,8 @@ def compile_rule(inp: dict, rubric: dict | None) -> dict | None:
     return zero
 
 
-def score_multi(llm, ds, items, ckpt_path):
+def score_multi(ds, items, ckpt_path):
+    llm = None  # loaded on first item that needs it (fully checkpointed runs never load it)
     dims = ds.label_space["rubric"]["dimensions"]
     done = {}
     if ckpt_path.exists():
@@ -119,6 +120,7 @@ def score_multi(llm, ds, items, ckpt_path):
                 rubric, raw = ruled, "(compile rule)"
             else:
                 probs = problem_ids(ds.exams[s["input"]["exam_id"]]["statement"])
+                llm = llm or LocalLLM()
                 raw = llm.generate(SYSTEM_GRADER, multi_prompt(ds, s), max_new_tokens=800)
                 rubric = compile_rule(s["input"], aggregate(extract_json(raw) or {}, probs, dims))
             done[sid] = rubric
@@ -142,8 +144,7 @@ def main():
     run_dir.mkdir(parents=True, exist_ok=True)
     n_llm = sum(1 for s in multi if compile_rule(s["input"], None) is None)
     print(f"{args.split}: {len(multi)} multi-problem items, {n_llm} need the LLM (rest = compile rule)")
-    llm = LocalLLM() if n_llm else None
-    multi_pred = score_multi(llm, ds, multi, run_dir / f"multi_{args.split}.ckpt.jsonl")
+    multi_pred = score_multi(ds, multi, run_dir / f"multi_{args.split}.ckpt.jsonl")
 
     if args.split == "sample":
         pred = {sid: {"rubric": r, "total_score": sum(r.values())} for sid, r in multi_pred.items()}

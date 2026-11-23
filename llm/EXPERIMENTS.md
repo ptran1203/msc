@@ -18,7 +18,7 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 
 | date | run_id | note | local | sub |
 |---|---|---|---|---|
-| 2026-11-23 | `qwen7b-fewshot-testreport` (runner v12, shard 0 only) | re-run of v11's crashed shard 0 (164 items, Tasks 1-3) after the decode fix; merge locally with v11 shard 1 | running | — |
+| 2026-11-23 | `qwen7b-fewshot-testreport` (runner v12 shard 0 + v11 shard 1) → `qwen7b-fewshot-testreport-rules` | merged locally; rules: 70 L2 compile quotes, 82 L1 pass-all (25 changed). All 3 files validated | local (32 items, same config): see ablation rows | not yet |
 | 2026-11-22 | `qwen3-8b-thinking` testreport ablation (Colab T4) | same as `testreport_ablation` but **Qwen3-8B, thinking mode** (`eval_testreport_sample.py --model Qwen/Qwen3-8B --thinking`) | running | — |
 | 2026-11-22 | `testreport_ablation` (local, 32 items) | A: idea2 prompt + compile-only log, no test_report · B: + test_report (17/32 items, EX02) · A/B + rules 1+2 — `eval_testreport_sample.py` | macro / overlap / compl: **A** .2372 / .1986 / 1.0 · **B** .2190 / .1992 / 1.0 · **A+rules** .2372 / .2599 / 1.0 · **B+rules** .2190 / .2644 / 1.0 → test_report doesn't help labels (−.018 macro); rules give +.06 overlap | — |
 | 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + **test_report** in prompt, then both rules | **failed**: shard 0 crashed at startup (student program printed non-UTF-8 bytes; fixed in 44da59f). Shard 1 (164 items, all 3 tasks) recovered to `outputs/qwen7b-fewshot-testreport/` | — |
@@ -56,6 +56,7 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 
 | date | run_id | note | local | sub |
 |---|---|---|---|---|
+| 2026-11-23 | `task1-multi-v3-singles-testreport` | `task1-multi-v3` multi-problem part unchanged + single-problem items from `qwen7b-fewshot-testreport` (compile-only log + test_report in prompt) + compile rule | 97/204 singles changed; singles at 10: 4 → 34, at 8: 103 → 67 (82 singles pass all verified tests) | not yet |
 | 2026-11-23 | `task1-multi-v3` | **multi-problem collapse**: every earlier file in this log scored public multi-problem ~0.7/10 (single ~5.6) — link-based compile log faked failures on function-only files + model applied the P1 'fail to read the file' prerequisite (QA: ignore it). Fix (`task1_multi.py`): compile rule (g++ fail → multi all 0 / single code_quality 1, 6/6 on sample; clean → compilable=1) + multi-problem scored **per problem, equal weights, no prerequisite**, dims averaged; singles from `qwen7b-fewshot-v2` + compile rule | sample multi (15) QWK .383 → **.467**; public multi mean 0.72 → 2.05 (63 compile-rule zeros, 21 compiling items ≥6) | **0.7331** (prev best 0.69, user-reported) |
 | ? | unknown (user-reported) | Task 1 submission not logged here — file/run unknown | — | **0.69** |
 | 2026-11-22 | `qwen7b-fewshot-testreport-sample` vs `qwen7b-fewshot-noreport-sample` (local) | few-shot + compile-only log, with vs without test_report (17/32 items get one); rubric clamped to range | QWK / MAE: **with** .5662 / 2.375 · **without** .5765 / 2.375 → no QWK gain; per-dim exact better with report (logic .66 vs .53, edge .47 vs .41, quality .56 vs .63) | — |
