@@ -64,8 +64,8 @@ level definitions in `label_space.json` (instructor QA, `knowledge/QA.md`).
 | ? | unknown (user-reported) | Task 1 submission not logged here — file/run unknown | — | **0.69** |
 | 2026-11-22 | `qwen7b-fewshot-testreport-sample` vs `qwen7b-fewshot-noreport-sample` (local) | few-shot + compile-only log, with vs without test_report (17/32 items get one); rubric clamped to range | QWK / MAE: **with** .5662 / 2.375 · **without** .5765 / 2.375 → no QWK gain; per-dim exact better with report (logic .66 vs .53, edge .47 vs .41, quality .56 vs .63) | — |
 | 2026-11-22 | `qwen7b-fewshot-testreport` (runner v11) | few-shot + compile_log (compile-only) + test_report | failed (see Task 3 row); shard 1 recovered | — |
-| 2026-11-19 | `qwen-rag` (runner v8) | RAG exemplars, no compile_log | — | -0.2171 |
-| 2026-11-19 | `qwen-fewshot` | static few-shot, no compile_log | — | -0.2108 |
+| 2026-11-19 | `qwen-rag` (runner v8) | RAG exemplars, no compile_log | — | -0.2171 (submission bug -- not a method score, ignore) |
+| 2026-11-19 | `qwen-fewshot` | static few-shot, no compile_log | — | -0.2108 (submission bug -- not a method score, ignore) |
 | 2026-11-23 | `qwen2.5-coder-7b-instruct-ft-task3` (Colab) | QLoRA 7B on 588 14B targets, 1 level/sample (~74 steps), ckpt every 10 steps + adapter/eval/preds on Google Drive (`colab/colab_finetune_*.ipynb`); Kaggle dropped (weekly GPU quota) | pending | — |
 | 2026-11-23 | `cot-qwen3-8b-thinking` (local 3060) | CoT prompting track: Qwen3-8B thinking mode, Task 3 test_report ablation (A/B ± rules) on the 32 sample items | running | — |
 | 2026-11-23 | `qwen3-8b-thinking-fewshot` (Task 2, sample, local 3060) | CoT: Qwen3-8B thinking (budget 1024 + forced close), plain Task 2 few-shot prompt + test_report, no Task 3 input; 0/32 parse fail, ~2 min/item (3060, 4-bit) | macro **0.311** alone (7B same prompt .152); +compile/format rules .335; ∪ feat-svc + rules **.340**; 3.0 labels/item vs gold 1.28 | — |

@@ -1,7 +1,7 @@
 """Task 1 v3: per-problem scoring for multi-problem exams + compile rule for every item.
 
 Why: every earlier Task 1 file scored public multi-problem submissions ~0.7-1.2/10 (single:
-~5.6) -> leaderboard QWK -0.21. Causes found in the model's reasoning:
+~5.6). Causes found in the model's reasoning:
   - the old link-based compile log called function-only files (no main, as the exam
     requires) uncompilable -> 20/61 compiling files got compilable=0, total 0;
   - the statement's "If you fail to read the file, the remaining problems will not be
@@ -14,9 +14,16 @@ Fix:
     policy removed, point weights replaced by "equal"), dims averaged over problems, rounded.
   - single-problem items: taken from --base (another run's Task 1 file) + the compile rule.
 
+Options (v5):
+  --model/--thinking  e.g. Qwen/Qwen3-8B with thinking (budget-forced, see LocalLLM)
+  --anchor            one teacher-graded EX01 submission (same exam style as Class01/02:
+                      General struct, CSV, linked list) as a SCALE example -- rubric numbers
+                      only, never the feedback field. Most similar compiling EX01 item by code
+                      embedding; on --split sample it is leave-one-out (never the item itself).
+
 Usage:
-  python -u task1_multi.py --split sample                         # 15 EX01 items vs gold
-  python -u task1_multi.py --split public --base <task1 public json> --out-tag <tag>
+  python -u task1_multi.py --split sample [--model Qwen/Qwen3-8B --thinking] [--anchor] --out-tag <tag>
+  python -u task1_multi.py --split public --base <task1 public json> --out-tag <tag> [same options]
 """
 import argparse
 import json
@@ -26,10 +33,11 @@ from compile_check import attach_real_compile_log
 from test_report import attach_test_report
 from data import REPO_ROOT, load_public_test, load_sample_dataset, read_code
 from eval import task1_metrics
-from llm_client import LocalLLM, extract_json
+from llm_client import MODEL_NAME, LocalLLM, extract_json
 from prompts import SYSTEM_GRADER
 
 OUT = REPO_ROOT / "outputs"
+ANCHOR_MAX_CHARS = 4000  # anchor code cap; keeps prompt + thinking well under the 12GB VRAM cliff
 
 
 def clean_statement(statement: str) -> str:
@@ -42,7 +50,39 @@ def problem_ids(statement: str) -> list:
     return [f"P{n}" for n in re.findall(r"\*\*Problem (\d+)", statement)]
 
 
-def multi_prompt(ds, sample) -> str:
+def anchor_block(anchor) -> str:
+    if anchor is None:
+        return ""
+    a_ds, a = anchor
+    out = a["output"]
+    return f"""## Ví dụ tham khảo: một bài CÙNG DẠNG ĐỀ ({a['input']['exam_id']}) đã được giảng viên chấm
+```cpp
+{read_code(a_ds, a)}
+```
+Điểm giảng viên cho cả bài:{json.dumps(out['rubric'])}, tổng {out['total_score']}/10.
+Dùng ví dụ này để hiểu THANG ĐIỂM / mức khắt khe của giảng viên; đề khác nên KHÔNG sao chép điểm.
+
+"""
+
+
+def pick_anchors(items, items_ds, pool_ds):
+    """{sample_id: (pool_ds, anchor)}: most similar compiling multi-problem pool item by code
+    embedding, never the item itself (leave-one-out when items and pool are the same split)."""
+    from rag import _get_model
+    pool = [s for s in pool_ds.tasks[1] if s["input"]["exam_type"] == "multi_problem"
+            and not (s["input"].get("compile_log") or "").startswith("Lỗi biên dịch")
+            and len(read_code(pool_ds, s)) <= ANCHOR_MAX_CHARS]
+    enc = _get_model()
+    P = enc.encode([read_code(pool_ds, s) for s in pool], normalize_embeddings=True)
+    T = enc.encode([read_code(items_ds, s) for s in items], normalize_embeddings=True)
+    out = {}
+    for s, t in zip(items, T):
+        order = sorted(range(len(pool)), key=lambda j: -float(P[j] @ t))
+        out[s["sample_id"]] = next((pool_ds, pool[j]) for j in order if pool[j]["sample_id"] != s["sample_id"])
+    return out
+
+
+def multi_prompt(ds, sample, anchor=None) -> str:
     exam = ds.exams[sample["input"]["exam_id"]]
     probs = problem_ids(exam["statement"])
     dims = ds.label_space["rubric"]["dimensions"]
@@ -70,7 +110,7 @@ def multi_prompt(ds, sample) -> str:
 ## Rubric 6 chiều (áp dụng cho TỪNG câu)
 {rubric_desc}
 
-Trước khi chấm, phân tích ngắn gọn từng câu vào trường "reasoning" (đúng/sai ở đâu).
+{anchor_block(anchor)}Trước khi chấm, phân tích ngắn gọn từng câu vào trường "reasoning" (đúng/sai ở đâu).
 Trả lời CHỈ một JSON object, "reasoning" đứng TRƯỚC:
 {{"reasoning": "<phân tích ngắn từng câu>", {schema}}}
 """
@@ -124,7 +164,7 @@ def test_rule(inp: dict) -> dict | None:
     return dict(full, io_format=0, logic=0, edge_case=0)
 
 
-def score_multi(ds, items, ckpt_path):
+def score_multi(ds, items, ckpt_path, model=MODEL_NAME, thinking=False, anchors=None):
     llm = None  # loaded on first item that needs it (fully checkpointed runs never load it)
     dims = ds.label_space["rubric"]["dimensions"]
     done = {}
@@ -142,8 +182,9 @@ def score_multi(ds, items, ckpt_path):
                 rubric, raw = ruled, "(compile rule)"
             else:
                 probs = problem_ids(ds.exams[s["input"]["exam_id"]]["statement"])
-                llm = llm or LocalLLM()
-                raw = llm.generate(SYSTEM_GRADER, multi_prompt(ds, s), max_new_tokens=800)
+                llm = llm or LocalLLM(model_name=model, thinking=thinking)
+                anchor = (anchors or {}).get(sid)
+                raw = llm.generate(SYSTEM_GRADER, multi_prompt(ds, s, anchor), max_new_tokens=800)
                 rubric = compile_rule(s["input"], aggregate(extract_json(raw) or {}, probs, dims))
             done[sid] = rubric
             ck.write(json.dumps({"sample_id": sid, "rubric": rubric, "raw": raw}, ensure_ascii=False) + "\n")
@@ -157,6 +198,9 @@ def main():
     ap.add_argument("--split", choices=["sample", "public"], required=True)
     ap.add_argument("--base", help="public: Task 1 file whose single-problem predictions are kept")
     ap.add_argument("--out-tag", default="task1-multi-v3")
+    ap.add_argument("--model", default=MODEL_NAME)
+    ap.add_argument("--thinking", action="store_true", help="Qwen3-style thinking (budget-forced)")
+    ap.add_argument("--anchor", action="store_true", help="one teacher-graded EX01 example as a scale anchor (rubric only)")
     ap.add_argument("--single-test-rule", action="store_true", help="single-problem items with a test_report: rubric from test outcomes (test_rule)")
     args = ap.parse_args()
 
@@ -168,7 +212,13 @@ def main():
     run_dir.mkdir(parents=True, exist_ok=True)
     n_llm = sum(1 for s in multi if compile_rule(s["input"], None) is None)
     print(f"{args.split}: {len(multi)} multi-problem items, {n_llm} need the LLM (rest = compile rule)")
-    multi_pred = score_multi(ds, multi, run_dir / f"multi_{args.split}.ckpt.jsonl")
+    anchors = None
+    if args.anchor:
+        pool_ds = ds if args.split == "sample" else load_sample_dataset()
+        if pool_ds is not ds:
+            attach_real_compile_log(pool_ds, 1)
+        anchors = pick_anchors(multi, ds, pool_ds)
+    multi_pred = score_multi(ds, multi, run_dir / f"multi_{args.split}.ckpt.jsonl", args.model, args.thinking, anchors)
 
     if args.split == "sample":
         pred = {sid: {"rubric": r, "total_score": sum(r.values())} for sid, r in multi_pred.items()}
