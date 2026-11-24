@@ -1,0 +1,15 @@
+{
+  "run_id": "20261004T151200-1a2b3c4-9f8e7d",
+  "command": "submit",
+  "status": "error",
+  "exit_code": 6,
+  "outputs": [],
+  "error": {
+    "type": "https://grader.invalid/problems/quota-exceeded",
+    "title": "Daily submission quota reached",
+    "status": 429,
+    "detail": "upload 3 of 2 allowed on 2026-10-04 (val.timezone Asia/Ho_Chi_Minh, val.quota_unit upload)",
+    "code": "QuotaExceeded",
+    "exit_code": 6
+  }
+}

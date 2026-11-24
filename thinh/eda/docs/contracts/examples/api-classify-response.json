@@ -1,0 +1,78 @@
+{
+  "request_id": "0b9a8c7d-6e5f-4a3b-8c2d-1e0f9a8b7c6d",
+  "sample_id": "EX02-S999",
+  "result": {
+    "taxonomy_error": ["Lỗi nhập/xuất", "Lỗi hàm"]
+  },
+  "label_probabilities": {
+    "Lỗi biên dịch": 0.01,
+    "Lỗi nhập/xuất": 0.81,
+    "Lỗi logic": 0.22,
+    "Lỗi vòng lặp": 0.05,
+    "Lỗi mảng/chuỗi": 0.03,
+    "Lỗi hàm": 0.64,
+    "Lỗi edge case": 0.07,
+    "Lỗi thuật toán": 0.09,
+    "Lỗi hard-code": 0.02,
+    "Lỗi style": 0.04
+  },
+  "t1_total_used": 7,
+  "cross_constraint_applied": false,
+  "evidence": {
+    "code_sha": "5f2b9c1d7e3a4b6c8d0e2f4a6b8c0d1e3f5a7b9c",
+    "toolchain_id": "000000000000",
+    "evidence_mode": "given_signals_only",
+    "missing_code": false,
+    "tests_source": "given_report",
+    "compile": {
+      "log_has_error": false,
+      "log_has_link_error": false,
+      "log_build_failed": false,
+      "log_truncated": false,
+      "rebuild_build_failed": null,
+      "rebuild_agrees": null
+    },
+    "tests": {
+      "n_tests": 8,
+      "strict_rate": 0.0,
+      "lenient_rate": 0.75,
+      "io_gap": 0.75,
+      "n_by_fail_class": {"wrong": 0, "empty_crash": 2, "prompt_only": 6, "prompt_wrong": 0, "timeout": 0},
+      "crash_suspected_ub": true,
+      "nondeterministic": false,
+      "n_prompt_prefix": 6,
+      "n_whitespace_issue": 0
+    },
+    "static": {
+      "effective_code_lines": 22,
+      "all_commented": false,
+      "has_main": true,
+      "functions_missing": [],
+      "functions_stub": [],
+      "disallowed_includes": [],
+      "forbidden_calls": [],
+      "hardcode_suspected": false
+    },
+    "policy": null
+  },
+  "review": {
+    "needs_review": true,
+    "route": "deep",
+    "blind_audit": false,
+    "reasons": [
+      {"code": "io_anomaly", "source": "BA §9.3 #5", "detail": "prompt_prefix on 6/8 reported outputs; io_gap 0.75"},
+      {"code": "crash_or_timeout", "source": "BA §9.3 #6", "detail": "2/8 reported outputs empty (actual = \"\")"}
+    ]
+  },
+  "versions": {
+    "contract_version": "0.1.0",
+    "service_run_id": "20261004T091500-1a2b3c4-9f8e7d",
+    "model_id": "Qwen/Qwen3-8B",
+    "model_revision": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c",
+    "adapter_sha256": null,
+    "config_sha256": "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0",
+    "toolchain_id": "000000000000",
+    "sandbox_image_digest": null,
+    "cache": "miss"
+  }
+}

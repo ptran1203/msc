@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/predictions/predictions-t1.schema.json",
+  "title": "Predictions file - Task 1 (proposed default)",
+  "description": "Default submission layout until Q-01 is answered (02 §6.3, 03 §2.5): one file per task, top-level array, each item has exactly sample_id and output; output repeats the output object of the task file. Matches Settings val.layout=\"array\", val.output_style=\"nested\", val.files=\"per_task\". Internal metadata such as gate_source must never appear here. Checks that JSON Schema cannot express are listed in x-validator-only and enforced by val/validator.py before every upload.",
+  "x-contract-version": "0.1.0",
+  "x-status": "proposed-pending-Q-01",
+  "x-settings": { "val.layout": "array", "val.output_style": "nested", "val.files": "per_task" },
+  "x-validator-only": [
+    "UTF-8 without BOM, valid JSON (FR-VAL-01, FR-VAL-04)",
+    "set of sample_id == input ids of the split; no missing, no extra, no duplicate (FR-VAL-01)",
+    "item order == input order (FR-VAL-04)",
+    "strict integers: reject 7.0 although JSON Schema 'integer' accepts it (FR-VAL-04)",
+    "total_score == sum of the 6 rubric values (BR-01)",
+    "official organiser check agrees (FR-VAL-02)"
+  ],
+  "type": "array",
+  "minItems": 1,
+  "items": { "$ref": "#/$defs/PredictionItem" },
+  "$defs": {
+    "PredictionItem": {
+      "type": "object",
+      "required": ["sample_id", "output"],
+      "additionalProperties": false,
+      "properties": {
+        "sample_id": { "type": "string", "minLength": 1, "description": "No pattern on purpose: the EX..-S... shape is only observed on 32 samples [GT] and must not block a private file; the id set is checked against the input ids (validator rule 4, 06 §5)." },
+        "output": { "$ref": "#/$defs/T1Output" }
+      }
+    },
+    "T1Output": {
+      "type": "object",
+      "required": ["rubric", "total_score"],
+      "additionalProperties": false,
+      "properties": {
+        "rubric": { "$ref": "#/$defs/Rubric" },
+        "total_score": { "type": "integer", "minimum": 0, "maximum": 10 }
+      }
+    },
+    "Rubric": {
+      "type": "object",
+      "required": ["compilable", "io_format", "logic", "edge_case", "complexity", "code_quality"],
+      "additionalProperties": false,
+      "properties": {
+        "compilable": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "io_format": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "logic": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "edge_case": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "complexity": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "code_quality": { "type": "integer", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

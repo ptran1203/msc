@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "exam_id": "EX01",
+  "exam_sha": "7c3e9a1f5b2d4c6e8a0b2d4f6e8c0a1b3d5f7e9c1a3b5d7f9e1c3a5b7d9f1e3a",
+  "exam_type": "multi_problem",
+  "problems": [
+    {"pid": "P1", "prototype": "General* prob1(string filename, int& n);", "io_mode": null, "weight_statement": 1, "weight_max_score": 2.5, "prerequisite_of": ["P2", "P3", "P4"]},
+    {"pid": "P2", "prototype": "Node* prob2(General* generals, int n);", "io_mode": null, "weight_statement": 4, "weight_max_score": 2.5, "prerequisite_of": []},
+    {"pid": "P3", "prototype": "General prob3(Node* head);", "io_mode": null, "weight_statement": 2, "weight_max_score": 2.5, "prerequisite_of": []},
+    {"pid": "P4", "prototype": "void prob4(Node*& head, string nationality);", "io_mode": null, "weight_statement": 3, "weight_max_score": 2.5, "prerequisite_of": []}
+  ],
+  "weights_used": {"P1": 1, "P2": 4, "P3": 2, "P4": 3},
+  "weight_conflict": true,
+  "prereq_edges": [["P1", "P2"], ["P1", "P3"], ["P1", "P4"]],
+  "zero_clauses": [
+    {"kind": "rule_violation", "scope_written": "file", "source_text": "vi phạm quy định"},
+    {"kind": "plagiarism", "scope_written": "file", "source_text": "giống bài người khác"},
+    {"kind": "compile_fail", "scope_written": "file", "source_text": "không biên dịch được"},
+    {"kind": "infinite_loop", "scope_written": "file", "source_text": "tạo vòng lặp vô hạn"}
+  ],
+  "allowed_includes": ["iostream", "fstream", "sstream", "string", "cstring", "cmath"],
+  "forbidden_calls": [],
+  "compile_profile": "syntax_only",
+  "public_tests": [],
+  "answer_vocab": [],
+  "policy_failed": false,
+  "extraction_method": "regex",
+  "llm_revision": null,
+  "votes": 0
+}

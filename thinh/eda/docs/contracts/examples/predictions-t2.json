@@ -1,0 +1,6 @@
+[
+  {"sample_id": "EX01-S999", "output": {"taxonomy_error": ["Lỗi hàm", "Lỗi hard-code"]}},
+  {"sample_id": "EX02-S997", "output": {"taxonomy_error": []}},
+  {"sample_id": "EX02-S998", "output": {"taxonomy_error": ["Lỗi biên dịch"]}},
+  {"sample_id": "EX02-S999", "output": {"taxonomy_error": ["Lỗi nhập/xuất", "Lỗi hàm"]}}
+]

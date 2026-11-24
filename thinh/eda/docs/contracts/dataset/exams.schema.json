@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/dataset/exams.schema.json",
+  "title": "Exam metadata file (exams.json) - observed",
+  "description": "Observed contract of exams.json (2 exams in the sample). Mirrors 03 §2.1 Exam (extra=\"allow\"), MultiProblem and SingleProblem. problems[] has two variants selected by exam_type: multi_problem (EX01: pid, max_score, prototype, optional is_prerequisite_for) and single_problem (EX02: pid, max_score, io_mode, constraints). Weights in statement vs max_score may disagree (EX01: 1/4/2/3 vs 2.5 x 4, BR-07, Q-08); the schema does not arbitrate, POL does (weight_conflict).",
+  "x-contract-version": "0.1.0",
+  "x-status": "observed",
+  "x-source": ["sample_dataset/exams.json", "03 §2.1", "02 §6.1"],
+  "type": "object",
+  "required": ["exams"],
+  "additionalProperties": false,
+  "properties": {
+    "exams": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Exam" } }
+  },
+  "$defs": {
+    "ExamType": { "enum": ["multi_problem", "single_problem"] },
+    "Pid": { "type": "string", "pattern": "^P[0-9]+$" },
+    "Exam": {
+      "type": "object",
+      "required": [
+        "exam_id", "exam_type", "language", "course", "week", "topic", "learning_outcome",
+        "bloom_level", "programming_skill", "problem_type", "difficulty_teacher",
+        "estimated_time_min", "statement", "problems", "has_hidden_testcases"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "exam_id": { "type": "string", "pattern": "^EX[0-9]{2}$" },
+        "exam_type": { "$ref": "#/$defs/ExamType" },
+        "language": { "type": "string", "minLength": 1, "examples": ["cpp11"] },
+        "course": { "type": "string" },
+        "week": { "type": "integer", "minimum": 1 },
+        "topic": { "type": "array", "items": { "type": "string" } },
+        "learning_outcome": { "type": "string" },
+        "bloom_level": { "type": "array", "items": { "type": "string" }, "examples": [["Apply", "Analyze"]] },
+        "programming_skill": { "type": "array", "items": { "type": "string" } },
+        "problem_type": { "type": "string" },
+        "difficulty_teacher": { "type": "string" },
+        "estimated_time_min": { "type": "integer", "minimum": 1 },
+        "statement": { "type": "string", "minLength": 1, "description": "Full markdown statement; source of weights, allowed includes, forbidden calls and zero-score clauses for POL (FR-POL-01)." },
+        "problems": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "oneOf": [{ "$ref": "#/$defs/MultiProblem" }, { "$ref": "#/$defs/SingleProblem" }] }
+        },
+        "grading_policy": { "type": ["string", "null"] },
+        "has_hidden_testcases": { "type": "boolean" },
+        "note": { "type": ["string", "null"], "description": "Observed to carry the compile command (e.g. -fsyntax-only for EX01), used for ProblemCard.compile_profile." }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "exam_type": { "const": "multi_problem" } }, "required": ["exam_type"] },
+          "then": { "properties": { "problems": { "items": { "$ref": "#/$defs/MultiProblem" } } } }
+        },
+        {
+          "if": { "properties": { "exam_type": { "const": "single_problem" } }, "required": ["exam_type"] },
+          "then": { "properties": { "problems": { "maxItems": 1, "items": { "$ref": "#/$defs/SingleProblem" } } } }
+        }
+      ]
+    },
+    "MultiProblem": {
+      "type": "object",
+      "description": "Variant observed in EX01. is_prerequisite_for is present only on prerequisite problems (default []).",
+      "required": ["pid", "max_score", "prototype"],
+      "additionalProperties": false,
+      "properties": {
+        "pid": { "$ref": "#/$defs/Pid" },
+        "max_score": { "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+        "prototype": { "type": "string", "minLength": 1 },
+        "is_prerequisite_for": { "type": "array", "items": { "$ref": "#/$defs/Pid" }, "uniqueItems": true }
+      }
+    },
+    "SingleProblem": {
+      "type": "object",
+      "description": "Variant observed in EX02.",
+      "required": ["pid", "max_score", "io_mode"],
+      "additionalProperties": false,
+      "properties": {
+        "pid": { "$ref": "#/$defs/Pid" },
+        "max_score": { "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+        "io_mode": { "type": "string", "minLength": 1, "examples": ["stdin/stdout"] },
+        "constraints": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

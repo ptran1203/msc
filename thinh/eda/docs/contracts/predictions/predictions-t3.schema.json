@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/predictions/predictions-t3.schema.json",
+  "title": "Predictions file - Task 3 (proposed default)",
+  "description": "Default submission layout until Q-01 is answered (02 §6.3, 03 §2.5). feedback must contain at least one non-whitespace character and no control character other than LF (03 §2.5, FR-T3-01). Level compliance is checked by GRD before writing, not by this schema.",
+  "x-contract-version": "0.1.0",
+  "x-status": "proposed-pending-Q-01",
+  "x-settings": { "val.layout": "array", "val.output_style": "nested", "val.files": "per_task" },
+  "x-validator-only": [
+    "UTF-8 without BOM, valid JSON (FR-VAL-01, FR-VAL-04)",
+    "set of sample_id == input ids of the split; no missing, no extra, no duplicate (FR-VAL-01)",
+    "item order == input order (FR-VAL-04)",
+    "feedback is NFC and detected as Vietnamese (FR-T3-01)",
+    "official organiser check agrees (FR-VAL-02)"
+  ],
+  "type": "array",
+  "minItems": 1,
+  "items": { "$ref": "#/$defs/PredictionItem" },
+  "$defs": {
+    "PredictionItem": {
+      "type": "object",
+      "required": ["sample_id", "output"],
+      "additionalProperties": false,
+      "properties": {
+        "sample_id": { "type": "string", "minLength": 1, "description": "No pattern on purpose: the EX..-S... shape is only observed on 32 samples [GT] and must not block a private file; the id set is checked against the input ids (validator rule 4, 06 §5)." },
+        "output": { "$ref": "#/$defs/T3Output" }
+      }
+    },
+    "T3Output": {
+      "type": "object",
+      "required": ["feedback"],
+      "additionalProperties": false,
+      "properties": {
+        "feedback": {
+          "type": "string",
+          "minLength": 1,
+          "allOf": [
+            { "pattern": "\\S" },
+            { "pattern": "^[^\\u0000-\\u0009\\u000B-\\u001F\\u007F-\\u009F]*$" }
+          ]
+        }
+      }
+    }
+  }
+}

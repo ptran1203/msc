@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/internal/t3-output.schema.json",
+  "title": "T3Output (and T3Prediction in $defs)",
+  "description": "Root = 03 §2.1 T3Output {feedback} (plain str in pydantic). $defs/T3Prediction = 03 §2.5 T3Prediction: non-empty after strip and no control character except LF (03 §2.5 validator table, FR-T3-01). Only text that passed GRD (or a level-correct template) may become a T3Prediction (FR-GRD-06).",
+  "x-contract-version": "0.1.0",
+  "x-status": "internal",
+  "x-pydantic": ["grader.ing.schemas:T3Output", "grader.t3.pipeline:T3Prediction"],
+  "type": "object",
+  "required": ["feedback"],
+  "additionalProperties": false,
+  "properties": {
+    "feedback": { "type": "string" }
+  },
+  "$defs": {
+    "FeedbackText": {
+      "type": "string",
+      "minLength": 1,
+      "allOf": [
+        { "pattern": "\\S" },
+        { "pattern": "^[^\\u0000-\\u0009\\u000B-\\u001F\\u007F-\\u009F]*$" }
+      ]
+    },
+    "T3Prediction": {
+      "type": "object",
+      "required": ["feedback"],
+      "additionalProperties": false,
+      "x-invariants": ["NFC", "detected as Vietnamese (shared/vietnamese.py)", "passed GRD check at the requested level, or is the level template"],
+      "properties": {
+        "feedback": { "$ref": "#/$defs/FeedbackText" }
+      }
+    }
+  }
+}

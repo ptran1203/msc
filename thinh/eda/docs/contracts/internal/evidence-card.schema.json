@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/internal/evidence-card.schema.json",
+  "title": "EvidenceCard v1.0",
+  "description": "Mirrors 03 §2.3 EvidenceCard (extra=\"forbid\") and its nested models; exported to schemas/evidence_card.v1.json. One deterministic card per cache key (x-cache-key), shared by every arm of the tasks allowed to read its test source (FR-EVD-01): T1/T2 read the card built from the test_report of their input (tests_source = given_report); T3 reads only a card built from ProblemCard.public_tests re-run in the sandbox (tests_source = public_tests) or a card with run = null (tests_source = none), unless t3.use_t1_test_report = true (Q-14, BR-23, 06 §1.5). Compile errors, crashes and timeouts of student code are data here, never exceptions. The card never embeds student code or feedback; text is a compact summary <= evd.card_text_max_tokens tokens (not expressible in JSON Schema). Conditional rules below encode explicit statements of 03 (given_signals_only has no rebuild and no rerun, missing_code implies given_signals_only, run is null for multi_problem while FR-EVD-08 is Won't, functions_present is {} for single_problem) and the proposals of 06 §7.1 (tests_source, tests_sha, toolchain sentinel, nullable compile_given, n_tests = 0).",
+  "x-contract-version": "0.1.0",
+  "x-status": "internal",
+  "x-pydantic": "grader.evd.card:EvidenceCard",
+  "x-cache-key": ["code_sha", "toolchain_id", "tests_sha", "evidence_mode"],
+  "x-cache-key-note": "Key of the sandbox-derived core (compile_rebuild, run, static) stored under cache/evidence/ (03 §3.2, §3.10). Fields taken from the sample itself (sample_id, compile_given, cluster_id, cluster_size) and the POL attachments (problem_status, policy, text) are rebuilt per sample, so two samples with identical code share only the core. A T1/T2 card (given_report) and a T3 card (public_tests or none) of the same code differ in tests_sha and never overwrite each other.",
+  "type": "object",
+  "required": [
+    "schema_version", "sample_id", "exam_id", "exam_type", "code_sha", "toolchain_id",
+    "evidence_mode", "missing_code", "compile_given", "compile_rebuild", "tests_source", "tests_sha",
+    "run", "static", "cluster_id", "cluster_size", "problem_status", "policy", "text"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "sample_id": { "type": "string", "minLength": 1 },
+    "exam_id": { "type": "string", "minLength": 1 },
+    "exam_type": { "enum": ["multi_problem", "single_problem"] },
+    "code_sha": { "$ref": "#/$defs/Sha1" },
+    "toolchain_id": { "$ref": "#/$defs/ToolchainId", "description": "Toolchain of the rebuild/rerun; the sentinel NoToolchainId when evidence_mode = given_signals_only (nothing was compiled or run)." },
+    "evidence_mode": { "enum": ["full", "given_signals_only"] },
+    "missing_code": { "type": "boolean", "description": "code_file absent in predict mode (FR-ING-03)." },
+    "compile_given": {
+      "anyOf": [{ "$ref": "#/$defs/CompileLogInfo" }, { "type": "null" }],
+      "description": "Parsed organiser compile_log. null = no log was provided (REST only, 06 §1.6); the CE gate then reads compile_rebuild. An empty log \"\" is provided and parses to a CompileLogInfo without errors."
+    },
+    "compile_rebuild": { "anyOf": [{ "$ref": "#/$defs/RebuildResult" }, { "type": "null" }] },
+    "tests_source": {
+      "enum": ["given_report", "public_tests", "none"],
+      "description": "Origin of the test set in run. given_report = test_report of the T1/T2 input (re-run or not); T1/T2 only. public_tests = ProblemCard.public_tests re-run in the sandbox; the only test source T3 may read by default. none = run is null."
+    },
+    "tests_sha": {
+      "anyOf": [{ "$ref": "#/$defs/Sha1" }, { "type": "null" }],
+      "description": "sha1 of the canonical JSON (ensure_ascii=False, separators=(\",\", \":\")) of the ordered (input, expected) pairs actually used; null when tests_source = none. Part of the cache key."
+    },
+    "run": { "anyOf": [{ "$ref": "#/$defs/RunEvidence" }, { "type": "null" }] },
+    "static": { "$ref": "#/$defs/StaticEvidence" },
+    "cluster_id": { "type": "string", "pattern": "^c[0-9a-f]{10}$", "description": "\"c\" + sha1(\",\".join(sorted(sample_ids)))[:10] (FR-EVD-07)." },
+    "cluster_size": { "type": "integer", "minimum": 1 },
+    "problem_status": { "anyOf": [{ "$ref": "#/$defs/ProblemStatus" }, { "type": "null" }] },
+    "policy": { "anyOf": [{ "$ref": "#/$defs/PolicyFeatures" }, { "type": "null" }] },
+    "text": { "type": "string", "description": "Compact card text for prompts; no student code, no feedback. Describes only the tests of this card's tests_source." }
+  },
+  "not": {
+    "anyOf": [
+      { "required": ["feedback"] },
+      { "required": ["target_feedback_level"] },
+      { "required": ["level"] },
+      { "required": ["taxonomy_error"] },
+      { "required": ["labels"] }
+    ]
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "evidence_mode": { "const": "given_signals_only" } }, "required": ["evidence_mode"] },
+      "then": {
+        "properties": {
+          "toolchain_id": { "$ref": "#/$defs/NoToolchainId" },
+          "compile_rebuild": { "type": "null" },
+          "tests_source": { "enum": ["given_report", "none"] },
+          "run": {
+            "anyOf": [
+              { "type": "null" },
+              { "properties": { "tests": { "items": { "properties": { "source": { "const": "given_report" } } } } } }
+            ]
+          }
+        }
+      },
+      "else": {
+        "properties": { "toolchain_id": { "not": { "$ref": "#/$defs/NoToolchainId" } } }
+      }
+    },
+    {
+      "if": { "properties": { "missing_code": { "const": true } }, "required": ["missing_code"] },
+      "then": { "properties": { "evidence_mode": { "const": "given_signals_only" } } }
+    },
+    {
+      "if": { "properties": { "exam_type": { "const": "multi_problem" } }, "required": ["exam_type"] },
+      "then": { "properties": { "run": { "type": "null" }, "tests_source": { "const": "none" } } }
+    },
+    {
+      "if": { "properties": { "exam_type": { "const": "single_problem" } }, "required": ["exam_type"] },
+      "then": { "properties": { "static": { "properties": { "functions_present": { "maxProperties": 0 } } } } }
+    },
+    {
+      "if": { "properties": { "tests_source": { "const": "none" } }, "required": ["tests_source"] },
+      "then": { "properties": { "run": { "type": "null" }, "tests_sha": { "type": "null" } } },
+      "else": { "properties": { "run": { "type": "object" }, "tests_sha": { "$ref": "#/$defs/Sha1" } } }
+    },
+    {
+      "if": { "properties": { "tests_source": { "const": "public_tests" } }, "required": ["tests_source"] },
+      "then": {
+        "properties": {
+          "run": { "properties": { "tests": { "items": { "properties": { "source": { "const": "rerun" } } } } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "compile_given": { "type": "null" } }, "required": ["compile_given"] },
+      "then": {
+        "properties": {
+          "evidence_mode": { "const": "full" },
+          "compile_rebuild": { "$ref": "#/$defs/RebuildResult" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "Sha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "ToolchainId": { "type": "string", "pattern": "^[0-9a-f]{12}$", "description": "sha1(image_digest | flags | sha runner.py)[:12] (03 §3.2)." },
+    "NoToolchainId": { "const": "000000000000", "description": "Sentinel toolchain_id for given_signals_only (proposed constants.NO_TOOLCHAIN_ID, 06 §7.1). Keeps the field a str as in 03 §2.3 while separating cache entries from any real toolchain." },
+    "Pid": { "type": "string", "pattern": "^P[0-9]+$" },
+    "Probability": { "type": "number", "minimum": 0, "maximum": 1 },
+    "FailClass": { "enum": ["wrong", "empty_crash", "prompt_only", "prompt_wrong", "timeout"] },
+    "Verdict": { "enum": ["ok", "nonzero_exit", "signal", "timeout", "memory_limit"] },
+    "CompileLogInfo": {
+      "type": "object",
+      "description": "Parsed original compile_log (FR-ING-06).",
+      "required": [
+        "log_has_error", "log_has_link_error", "log_build_failed", "log_warning_only", "log_truncated",
+        "n_errors", "n_errors_is_lower_bound", "n_warnings", "error_lines"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "log_has_error": { "type": "boolean", "description": "GNU diagnostic 'error:' (link errors excluded, BR-15)." },
+        "log_has_link_error": { "type": "boolean" },
+        "log_build_failed": { "type": "boolean", "description": "log_has_error OR log_has_link_error." },
+        "log_warning_only": { "type": "boolean" },
+        "log_truncated": { "type": "boolean", "description": "len(log) == data.compile_log_trunc_len." },
+        "n_errors": { "type": "integer", "minimum": 0 },
+        "n_errors_is_lower_bound": { "type": "boolean", "description": "Equals log_truncated." },
+        "n_warnings": { "type": "integer", "minimum": 0 },
+        "error_lines": { "type": "array", "items": { "type": "string" }, "maxItems": 5 }
+      }
+    },
+    "RebuildResult": {
+      "type": "object",
+      "description": "Sandbox rebuild with the pinned toolchain (FR-EVD-04).",
+      "required": ["toolchain_id", "profile", "returncode", "has_error", "link_error", "build_failed", "warnings", "truncated_log", "agrees_with_given"],
+      "additionalProperties": false,
+      "properties": {
+        "toolchain_id": { "$ref": "#/$defs/ToolchainId" },
+        "profile": { "type": "string", "minLength": 1, "examples": ["gcc13-O0", "gcc13-O0-ubsan"] },
+        "returncode": { "type": "integer" },
+        "has_error": { "type": "boolean" },
+        "link_error": { "type": "boolean" },
+        "build_failed": { "type": "boolean" },
+        "warnings": { "type": "array", "items": { "type": "string" } },
+        "truncated_log": { "type": "string", "description": "Cut with the same convention as the original log." },
+        "agrees_with_given": { "type": ["boolean", "null"], "description": "build_failed == compile_given.log_build_failed; null when compile_given is null." }
+      }
+    },
+    "TestRun": {
+      "type": "object",
+      "required": [
+        "idx", "source", "raw_stdout", "returncode", "signal", "timeout", "duration_ms", "verdict",
+        "output_truncated", "agrees_with_report", "strict_pass", "lenient_pass", "prompt_prefix",
+        "leading_ws", "trailing_ws", "case_mismatch", "fail_class"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "idx": { "type": "integer", "minimum": 0, "description": "Index in test_report (tests_source = given_report) or in ProblemCard.public_tests (tests_source = public_tests)." },
+        "source": { "enum": ["given_report", "rerun"], "description": "given_report = reported actual only; rerun = executed in the sandbox. Always rerun when tests_source = public_tests." },
+        "raw_stdout": { "type": ["string", "null"], "description": "null when only the stripped report is available." },
+        "returncode": { "type": ["integer", "null"] },
+        "signal": { "type": ["integer", "null"], "description": "returncode - 128 when killed by a signal." },
+        "timeout": { "type": "boolean" },
+        "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "verdict": { "anyOf": [{ "$ref": "#/$defs/Verdict" }, { "type": "null" }] },
+        "output_truncated": { "type": "boolean", "description": "stdout cut at sandbox.stdout_cap_bytes." },
+        "agrees_with_report": { "type": ["boolean", "null"], "description": "rerun of a reported case: stdout.strip() == actual of the report; null for public_tests (no report)." },
+        "strict_pass": { "type": "boolean" },
+        "lenient_pass": { "type": "boolean" },
+        "prompt_prefix": { "type": "boolean" },
+        "leading_ws": { "type": "boolean" },
+        "trailing_ws": { "type": "boolean" },
+        "case_mismatch": { "type": "boolean" },
+        "fail_class": { "anyOf": [{ "$ref": "#/$defs/FailClass" }, { "type": "null" }] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "strict_pass": { "const": true } }, "required": ["strict_pass"] },
+          "then": { "properties": { "fail_class": { "type": "null" } } }
+        }
+      ]
+    },
+    "RunEvidence": {
+      "type": "object",
+      "description": "Test evidence for single_problem (FR-EVD-02, FR-EVD-03). Convention for n_tests = 0 (single_problem that did not build, test_report = []): strict_rate = lenient_rate = io_gap = 0.0 and tests = [].",
+      "required": [
+        "n_tests", "strict_rate", "lenient_rate", "io_gap", "n_by_fail_class", "crash_suspected_ub",
+        "rerun_agreement", "nondeterministic", "constant_output", "tests"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "n_tests": { "type": "integer", "minimum": 0 },
+        "strict_rate": { "$ref": "#/$defs/Probability" },
+        "lenient_rate": { "$ref": "#/$defs/Probability" },
+        "io_gap": { "$ref": "#/$defs/Probability", "description": "lenient_rate - strict_rate." },
+        "n_by_fail_class": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/FailClass" },
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "crash_suspected_ub": { "type": "boolean" },
+        "rerun_agreement": { "anyOf": [{ "$ref": "#/$defs/Probability" }, { "type": "null" }] },
+        "nondeterministic": { "type": "boolean" },
+        "constant_output": { "type": "boolean", "description": "Every test produced the same stdout." },
+        "tests": { "type": "array", "items": { "$ref": "#/$defs/TestRun" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "n_tests": { "const": 0 } }, "required": ["n_tests"] },
+          "then": {
+            "properties": {
+              "strict_rate": { "const": 0 },
+              "lenient_rate": { "const": 0 },
+              "io_gap": { "const": 0 },
+              "tests": { "maxItems": 0 }
+            }
+          }
+        }
+      ]
+    },
+    "FunctionInfo": {
+      "type": "object",
+      "description": "Per prototype of the ProblemCard (FR-EVD-05).",
+      "required": ["present", "prototype_match", "empty_or_stub", "n_statements", "suspect_infinite_loop"],
+      "additionalProperties": false,
+      "properties": {
+        "present": { "type": "boolean" },
+        "prototype_match": { "type": "boolean" },
+        "empty_or_stub": { "type": "boolean" },
+        "n_statements": { "type": "integer", "minimum": 0 },
+        "suspect_infinite_loop": { "type": "boolean" }
+      }
+    },
+    "StaticEvidence": {
+      "type": "object",
+      "description": "tree-sitter analysis, runs even on compile errors (FR-EVD-05, FR-EVD-06).",
+      "required": [
+        "n_lines", "effective_code_lines", "commented_out_ratio", "max_commented_block", "all_commented",
+        "has_main", "functions_present", "disallowed_includes", "forbidden_calls",
+        "hardcode_fixed_path", "hardcode_cin_instead_of_file", "hardcode_fixed_array_size"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "n_lines": { "type": "integer", "minimum": 0 },
+        "effective_code_lines": { "type": "integer", "minimum": 0 },
+        "commented_out_ratio": { "$ref": "#/$defs/Probability" },
+        "max_commented_block": { "type": "integer", "minimum": 0 },
+        "all_commented": { "type": "boolean", "description": "effective_code_lines == 0." },
+        "has_main": { "type": "boolean" },
+        "functions_present": {
+          "type": "object",
+          "description": "Keyed by ProblemCard pid; {} for single_problem.",
+          "propertyNames": { "$ref": "#/$defs/Pid" },
+          "additionalProperties": { "$ref": "#/$defs/FunctionInfo" }
+        },
+        "disallowed_includes": { "type": "array", "items": { "type": "string" } },
+        "forbidden_calls": { "type": "array", "items": { "type": "string" } },
+        "hardcode_fixed_path": { "type": "boolean" },
+        "hardcode_cin_instead_of_file": { "type": "boolean" },
+        "hardcode_fixed_array_size": { "type": "boolean" }
+      }
+    },
+    "StatusProbs": {
+      "type": "object",
+      "description": "Distribution over the 4 problem states; sums to 1 (not expressible).",
+      "required": ["correct", "partial", "wrong", "missing"],
+      "additionalProperties": false,
+      "properties": {
+        "correct": { "$ref": "#/$defs/Probability" },
+        "partial": { "$ref": "#/$defs/Probability" },
+        "wrong": { "$ref": "#/$defs/Probability" },
+        "missing": { "$ref": "#/$defs/Probability" }
+      }
+    },
+    "ProblemStatus": {
+      "type": "object",
+      "description": "Per-problem status estimated from evidence and LLM reading of code only, never from feedback (FR-POL-04).",
+      "required": ["split_failed", "by_pid"],
+      "additionalProperties": false,
+      "properties": {
+        "split_failed": { "type": "boolean" },
+        "by_pid": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/Pid" },
+          "additionalProperties": { "$ref": "#/$defs/StatusProbs" }
+        }
+      }
+    },
+    "PolicyFeatures": {
+      "type": "object",
+      "description": "Output of pol/aggregate.py:aggregate(); a FEATURE, never an override (BR-08, FR-POL-02).",
+      "required": ["hard_score", "soft_score", "prereq_failed", "n_missing", "zero_clause_hits"],
+      "additionalProperties": false,
+      "properties": {
+        "hard_score": { "type": "number", "minimum": 0, "maximum": 10 },
+        "soft_score": { "type": "number", "minimum": 0, "maximum": 10 },
+        "prereq_failed": { "type": "boolean" },
+        "n_missing": { "type": "integer", "minimum": 0 },
+        "zero_clause_hits": { "type": "array", "items": { "type": "string" }, "description": "ZeroClause.kind values that fired." }
+      }
+    }
+  }
+}

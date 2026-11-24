@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/dataset/task3-feedback.schema.json",
+  "title": "Task 3 task file (level-controlled feedback) - observed",
+  "description": "Observed contract of the organiser file task3_feedback.json (sample n = 32). Mirrors 03 §2.1 TaskFile[T3Input, T3Output]. T3 input = T1 input - test_report + taxonomy_error + target_feedback_level (FR-ING-04); it has NO test_report (BR-23, Q-14). Its taxonomy_error equals the T2 gold on 32/32 samples, so T3 input must never feed T2 (BR-22). Level strings are the 4 exact values of label_space.json -> feedback_level, written as literal UTF-8; NFC and byte equality with constants.py are checked by a contract test (06 §6.2).",
+  "x-contract-version": "0.1.0",
+  "x-status": "observed",
+  "x-source": ["sample_dataset/task3_feedback.json", "sample_dataset/label_space.json", "03 §2.1", "02 §6.1"],
+  "type": "object",
+  "required": ["task", "description", "input_fields", "output_fields", "metric", "n_samples", "samples"],
+  "additionalProperties": true,
+  "properties": {
+    "task": { "type": "string", "minLength": 1, "examples": ["task3_pedagogical_feedback"] },
+    "description": { "type": "string" },
+    "level_definition_ref": {
+      "type": "string",
+      "description": "Optional in pydantic (TaskFile.level_definition_ref, T3 only).",
+      "examples": ["label_space.json -> feedback_level"]
+    },
+    "input_fields": { "type": "array", "items": { "type": "string" } },
+    "output_fields": { "type": "array", "items": { "type": "string" } },
+    "metric": { "type": "string" },
+    "n_samples": { "type": "integer", "minimum": 0 },
+    "samples": { "type": "array", "items": { "$ref": "#/$defs/Sample" } }
+  },
+  "$defs": {
+    "SampleId": { "type": "string", "pattern": "^EX[0-9]{2}-S[0-9]{3}$" },
+    "ExamType": { "enum": ["multi_problem", "single_problem"] },
+    "TaxonomyLabel": {
+      "enum": [
+        "Lỗi biên dịch",
+        "Lỗi nhập/xuất",
+        "Lỗi logic",
+        "Lỗi vòng lặp",
+        "Lỗi mảng/chuỗi",
+        "Lỗi hàm",
+        "Lỗi edge case",
+        "Lỗi thuật toán",
+        "Lỗi hard-code",
+        "Lỗi style"
+      ]
+    },
+    "Level": {
+      "enum": [
+        "Level 1 - Gợi ý nhẹ",
+        "Level 2 - Chẩn đoán",
+        "Level 3 - Gợi ý sửa",
+        "Level 4 - Lời giải mẫu"
+      ]
+    },
+    "Sample": {
+      "type": "object",
+      "required": ["sample_id", "input"],
+      "additionalProperties": false,
+      "properties": {
+        "sample_id": { "$ref": "#/$defs/SampleId" },
+        "input": { "$ref": "#/$defs/T3Input" },
+        "output": { "anyOf": [{ "$ref": "#/$defs/T3Output" }, { "type": "null" }] }
+      }
+    },
+    "T3Input": {
+      "type": "object",
+      "required": ["exam_id", "exam_type", "language", "code_file", "compile_log", "taxonomy_error", "target_feedback_level"],
+      "additionalProperties": false,
+      "properties": {
+        "exam_id": { "type": "string", "pattern": "^EX[0-9]{2}$" },
+        "exam_type": { "$ref": "#/$defs/ExamType" },
+        "language": { "type": "string", "minLength": 1, "examples": ["cpp11"] },
+        "code_file": { "type": "string", "pattern": "^submissions/EX[0-9]{2}/EX[0-9]{2}-S[0-9]{3}\\.cpp$" },
+        "compile_log": { "type": "string", "maxLength": 2000, "description": "Required, may be \"\"." },
+        "taxonomy_error": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TaxonomyLabel" },
+          "uniqueItems": true,
+          "maxItems": 10,
+          "description": "Given labels; [] is valid (FR-T3-08)."
+        },
+        "target_feedback_level": { "$ref": "#/$defs/Level" }
+      },
+      "not": {
+        "anyOf": [
+          { "required": ["test_report"] },
+          { "required": ["feedback"] }
+        ]
+      }
+    },
+    "T3Output": {
+      "type": "object",
+      "required": ["feedback"],
+      "additionalProperties": false,
+      "properties": {
+        "feedback": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Gold teacher feedback (Vietnamese). Used only by T3, EDA and the bonus dossier; forbidden for T1/T2 (BR-21). Never copied into docs, logs or prompts of T1/T2."
+        }
+      }
+    }
+  }
+}

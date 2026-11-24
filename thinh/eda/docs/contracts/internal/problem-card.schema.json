@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/internal/problem-card.schema.json",
+  "title": "ProblemCard v1.0",
+  "description": "Mirrors 03 §2.4 ProblemCard, ProblemSpec and ZeroClause; exported to schemas/problem_card.v1.json. One card per exam, extracted automatically from exams.json by ProblemCard.from_exam (regex first, then LLM guided JSON with self-consistency), cached by exam sha + extractor version + LLM revision (FR-POL-01). Hand-written cards for exams that exist only in dev/test are forbidden (C-05). On extraction failure the card uses uniform weights and policy_failed = true (PolicyExtractionError is caught in pol/extract.py). Not expressible here: prerequisite graph is a DAG, every pid in edges/weights exists, sum(weights_used) == 10.",
+  "x-contract-version": "0.1.0",
+  "x-status": "internal",
+  "x-pydantic": "grader.pol.problem_card:ProblemCard",
+  "x-invariants": ["prereq_edges form a DAG", "pids in prereq_edges and weights_used exist in problems", "sum(weights_used.values()) == 10"],
+  "type": "object",
+  "required": [
+    "schema_version", "exam_id", "exam_sha", "exam_type", "problems", "weights_used", "weight_conflict",
+    "prereq_edges", "zero_clauses", "allowed_includes", "forbidden_calls", "compile_profile",
+    "public_tests", "answer_vocab", "policy_failed", "extraction_method", "llm_revision", "votes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "exam_id": { "type": "string", "minLength": 1 },
+    "exam_sha": { "type": "string", "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$", "description": "Hash of the exam entry; algorithm to be fixed (see 06 §7)." },
+    "exam_type": { "enum": ["multi_problem", "single_problem"] },
+    "problems": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ProblemSpec" } },
+    "weights_used": {
+      "type": "object",
+      "description": "Statement weights when present, else max_score (03 §3.3 step 4).",
+      "propertyNames": { "$ref": "#/$defs/Pid" },
+      "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
+    },
+    "weight_conflict": { "type": "boolean", "description": "Normalised statement weights differ from normalised max_score (EX01: 1/4/2/3 vs 2.5 x 4)." },
+    "prereq_edges": { "type": "array", "items": { "$ref": "#/$defs/Edge" }, "description": "(prerequisite, dependent) pairs." },
+    "zero_clauses": { "type": "array", "items": { "$ref": "#/$defs/ZeroClause" } },
+    "allowed_includes": { "type": ["array", "null"], "items": { "type": "string" }, "description": "null = no restriction stated." },
+    "forbidden_calls": { "type": "array", "items": { "type": "string" } },
+    "compile_profile": { "enum": ["syntax_only", "build"] },
+    "public_tests": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/PublicTest" },
+      "description": "(input, expected) from statement/exams.json; harvested from test_report only when Q-14 allows (t3.use_t1_test_report)."
+    },
+    "answer_vocab": { "type": "array", "items": { "type": "string" }, "examples": [["True", "False"]] },
+    "policy_failed": { "type": "boolean" },
+    "extraction_method": { "enum": ["regex", "regex+llm", "fallback_uniform"] },
+    "llm_revision": { "type": ["string", "null"] },
+    "votes": { "type": "integer", "minimum": 0, "description": "Self-consistency votes used (0 when regex only)." }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "policy_failed": { "const": true } }, "required": ["policy_failed"] },
+      "then": { "properties": { "extraction_method": { "const": "fallback_uniform" } } }
+    },
+    {
+      "if": { "properties": { "extraction_method": { "const": "fallback_uniform" } }, "required": ["extraction_method"] },
+      "then": { "properties": { "policy_failed": { "const": true } } }
+    }
+  ],
+  "$defs": {
+    "Pid": { "type": "string", "pattern": "^P[0-9]+$" },
+    "ProblemSpec": {
+      "type": "object",
+      "required": ["pid", "prototype", "io_mode", "weight_statement", "weight_max_score", "prerequisite_of"],
+      "additionalProperties": false,
+      "properties": {
+        "pid": { "$ref": "#/$defs/Pid" },
+        "prototype": { "type": ["string", "null"] },
+        "io_mode": { "type": ["string", "null"] },
+        "weight_statement": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "weight_max_score": { "type": "number", "exclusiveMinimum": 0 },
+        "prerequisite_of": { "type": "array", "items": { "$ref": "#/$defs/Pid" }, "uniqueItems": true }
+      }
+    },
+    "ZeroClause": {
+      "type": "object",
+      "required": ["kind", "scope_written", "source_text"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["compile_fail", "infinite_loop", "plagiarism", "rule_violation", "other"] },
+        "scope_written": { "enum": ["file", "question"] },
+        "source_text": { "type": "string", "description": "Short span of the exam statement (organiser text, never student code)." }
+      }
+    },
+    "Edge": {
+      "type": "array",
+      "minItems": 2,
+      "prefixItems": [{ "$ref": "#/$defs/Pid" }, { "$ref": "#/$defs/Pid" }],
+      "items": false
+    },
+    "PublicTest": {
+      "type": "array",
+      "minItems": 2,
+      "prefixItems": [{ "type": "string" }, { "type": "string" }],
+      "items": false
+    }
+  }
+}

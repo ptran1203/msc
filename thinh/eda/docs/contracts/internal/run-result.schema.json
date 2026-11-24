@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/internal/run-result.schema.json",
+  "title": "RunResult - last stdout line of every grader command",
+  "description": "Exactly one JSON line printed last on stdout by every grader command so that make and CI can read the outcome (06 §1.4, proposed addition to 03 §4). No sample content: outputs are paths and sha256 only; in predict-private no sample_id appears anywhere (FR-SEC-05). error uses the same Problem shape as the REST layer (06 §4); $defs/Problem mirrors components.schemas.Problem of openapi.yaml and the parity test of 06 §6.2 keeps both identical.",
+  "x-contract-version": "0.1.0",
+  "x-status": "internal",
+  "x-pydantic": "grader.cli:RunResult (proposed)",
+  "type": "object",
+  "required": ["run_id", "command", "status", "exit_code", "outputs", "error"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": {
+      "anyOf": [{ "$ref": "#/$defs/RunId" }, { "type": "null" }],
+      "description": "null only when the command failed before a run_id existed (for example ConfigError while loading Settings)."
+    },
+    "command": {
+      "enum": ["smoke", "audit", "bonus", "features", "evd", "folds", "train", "eval", "predict", "predict-private", "submit", "reproduce", "ablation", "report", "serve"],
+      "description": "Typer command of 03 §4 (same enum as run-manifest.command)."
+    },
+    "status": { "enum": ["ok", "error"] },
+    "exit_code": { "type": "integer", "minimum": 0, "maximum": 6, "description": "03 §4: 0 ok; 1 other; 2 data/format; 3 security; 4 upstream/sandbox; 5 cache miss in replay; 6 quota or cost cap." },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "minLength": 1, "description": "Relative to RUNS_DIR, or to the submissions directory for submit." },
+          "sha256": { "$ref": "#/$defs/Sha256" }
+        }
+      }
+    },
+    "error": { "anyOf": [{ "$ref": "#/$defs/Problem" }, { "type": "null" }] }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "ok" } }, "required": ["status"] },
+      "then": { "properties": { "exit_code": { "const": 0 }, "error": { "type": "null" } } },
+      "else": { "properties": { "exit_code": { "minimum": 1 }, "error": { "$ref": "#/$defs/Problem" } } }
+    }
+  ],
+  "$defs": {
+    "RunId": { "type": "string", "pattern": "^[0-9]{8}T[0-9]{6}-[0-9a-f]{7}-[0-9a-f]{6}$", "description": "<UTC %Y%m%dT%H%M%S>-<git_sha7>-<config_sha6> (03 §3.10)." },
+    "Sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "Problem": {
+      "type": "object",
+      "description": "RFC 9457 problem details, same shape as openapi.yaml components.schemas.Problem. For CLI-only errors status carries the HTTP equivalent listed in 06 §4 (QuotaExceeded -> 429). Values are reported as type, length and sha1 only.",
+      "required": ["type", "title", "status"],
+      "additionalProperties": true,
+      "properties": {
+        "type": { "type": "string", "format": "uri", "description": "https://grader.invalid/problems/<slug>; slugs listed in 06 §4." },
+        "title": { "type": "string" },
+        "status": { "type": "integer", "minimum": 400, "maximum": 599 },
+        "detail": { "type": "string" },
+        "instance": { "type": "string", "format": "uri-reference" },
+        "code": {
+          "enum": [
+            "MalformedRequest", "Unauthorized", "PayloadTooLarge", "UnsupportedMediaType", "IdempotencyConflict",
+            "RateLimited", "RequestTimeout", "ServiceBusy", "ConfigError", "DataSchemaError", "DataIntegrityError",
+            "SubmissionFormatError", "FirewallViolation", "EgressBlocked", "TestIsolationError", "UpstreamError",
+            "SandboxError", "CacheMissError", "QuotaExceeded", "CostCapExceeded", "InternalError"
+          ]
+        },
+        "exit_code": { "type": "integer", "minimum": 0, "maximum": 6 },
+        "request_id": { "type": "string" },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["pointer", "rule"],
+            "additionalProperties": false,
+            "properties": {
+              "pointer": { "type": "string" },
+              "rule": { "type": "string" },
+              "observed": { "type": "string", "description": "type=..., length=..., sha1=... only." }
+            }
+          }
+        }
+      }
+    }
+  }
+}

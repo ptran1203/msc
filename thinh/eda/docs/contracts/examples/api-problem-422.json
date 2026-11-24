@@ -1,0 +1,14 @@
+{
+  "type": "https://grader.invalid/problems/data-schema",
+  "title": "Request body does not match the contract",
+  "status": 422,
+  "detail": "2 schema violations in POST /v1/grade",
+  "instance": "/v1/grade",
+  "code": "DataSchemaError",
+  "exit_code": 2,
+  "request_id": "7d6c5b4a-3f2e-4d1c-8b0a-9f8e7d6c5b4a",
+  "errors": [
+    {"pointer": "/feedback", "rule": "forbidden-field", "observed": "type=string, length=212, sha1=4e1f0c2a9b8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f"},
+    {"pointer": "/test_report/3/passed", "rule": "type", "observed": "type=string, length=4"}
+  ]
+}

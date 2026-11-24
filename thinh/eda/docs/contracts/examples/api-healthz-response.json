@@ -1,0 +1,10 @@
+{
+  "status": "ok",
+  "contract_version": "0.1.0",
+  "checks": {
+    "engine": "ok",
+    "sandbox": "ok",
+    "cache": "ok",
+    "label_space": "ok"
+  }
+}

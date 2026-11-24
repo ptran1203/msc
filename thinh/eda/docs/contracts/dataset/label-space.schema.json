@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/dataset/label-space.schema.json",
+  "title": "Label space file (label_space.json) - observed",
+  "description": "Observed contract of label_space.json. Mirrors 03 §2.1 LabelSpace (rubric: RubricSpace, taxonomy_error, feedback_level: LevelDef with aliases \"định nghĩa\"/\"cấm\"). Dimension names, domains, the 10 labels and the 4 level strings are pinned with const so that any change in the organiser file fails validation; the loader then raises ConfigError and the GRD rules must be reviewed (03 §3.1 step 2). Strings and the Vietnamese key names are literal UTF-8; a contract test (06 §6.2) checks that they are NFC and byte-equal to constants.py.",
+  "x-contract-version": "0.1.0",
+  "x-status": "observed",
+  "x-source": ["sample_dataset/label_space.json", "03 §2.1", "02 §6.1", "BR-02", "BR-12", "BR-18"],
+  "x-sha-check": "ing/loader.py:load_label_space compares the sha of the feedback_level block with the value pinned in constants.py (03 §3.1 step 2).",
+  "type": "object",
+  "required": ["rubric", "taxonomy_error", "feedback_level"],
+  "additionalProperties": false,
+  "properties": {
+    "rubric": { "$ref": "#/$defs/RubricSpace" },
+    "taxonomy_error": {
+      "description": "Exactly 10 labels in LS order (BR-12).",
+      "const": [
+        "Lỗi biên dịch",
+        "Lỗi nhập/xuất",
+        "Lỗi logic",
+        "Lỗi vòng lặp",
+        "Lỗi mảng/chuỗi",
+        "Lỗi hàm",
+        "Lỗi edge case",
+        "Lỗi thuật toán",
+        "Lỗi hard-code",
+        "Lỗi style"
+      ]
+    },
+    "feedback_level": {
+      "type": "array",
+      "description": "Four levels in order L1..L4 with definition and prohibition (BR-18).",
+      "minItems": 4,
+      "prefixItems": [
+        { "$ref": "#/$defs/LevelDef", "properties": { "level": { "const": "Level 1 - Gợi ý nhẹ" } } },
+        { "$ref": "#/$defs/LevelDef", "properties": { "level": { "const": "Level 2 - Chẩn đoán" } } },
+        { "$ref": "#/$defs/LevelDef", "properties": { "level": { "const": "Level 3 - Gợi ý sửa" } } },
+        { "$ref": "#/$defs/LevelDef", "properties": { "level": { "const": "Level 4 - Lời giải mẫu" } } }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "RubricSpace": {
+      "type": "object",
+      "required": ["dimensions", "total_range"],
+      "additionalProperties": false,
+      "properties": {
+        "dimensions": {
+          "type": "array",
+          "minItems": 6,
+          "prefixItems": [
+            { "$ref": "#/$defs/Dimension", "properties": { "name": { "const": "compilable" }, "range": { "const": [0, 1] } } },
+            { "$ref": "#/$defs/Dimension", "properties": { "name": { "const": "io_format" }, "range": { "const": [0, 1] } } },
+            { "$ref": "#/$defs/Dimension", "properties": { "name": { "const": "logic" }, "range": { "const": [0, 4] } } },
+            { "$ref": "#/$defs/Dimension", "properties": { "name": { "const": "edge_case" }, "range": { "const": [0, 2] } } },
+            { "$ref": "#/$defs/Dimension", "properties": { "name": { "const": "complexity" }, "range": { "const": [0, 1] } } },
+            { "$ref": "#/$defs/Dimension", "properties": { "name": { "const": "code_quality" }, "range": { "const": [0, 1] } } }
+          ],
+          "items": false
+        },
+        "total_range": { "const": [0, 10] }
+      }
+    },
+    "Dimension": {
+      "type": "object",
+      "required": ["name", "range", "vi"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "range": {
+          "type": "array",
+          "minItems": 2,
+          "prefixItems": [{ "type": "integer" }, { "type": "integer" }],
+          "items": false
+        },
+        "vi": { "type": "string", "description": "Vietnamese display name (data, not code)." }
+      }
+    },
+    "LevelDef": {
+      "type": "object",
+      "required": ["level", "định nghĩa", "cấm"],
+      "additionalProperties": false,
+      "properties": {
+        "level": { "type": "string" },
+        "định nghĩa": { "type": "string", "minLength": 1, "description": "Level definition; pydantic alias of LevelDef.definition." },
+        "cấm": { "type": "string", "minLength": 1, "description": "Prohibitions of the level; pydantic alias of LevelDef.forbidden. Level 4 uses an em dash (no prohibition)." }
+      }
+    }
+  }
+}

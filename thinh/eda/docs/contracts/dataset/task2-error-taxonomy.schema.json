@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/dataset/task2-error-taxonomy.schema.json",
+  "title": "Task 2 task file (multi-label error taxonomy) - observed",
+  "description": "Observed contract of the organiser file task2_error_taxonomy.json (sample n = 32). Mirrors 03 §2.1 TaskFile[T12Input, T2Output]; input is identical to Task 1 (FR-ING-04). Labels are the 10 NFC strings of label_space.json (BR-12); the enum is written as literal UTF-8 and a contract test (06 §6.2) checks that every string is NFC and byte-equal to constants.py, so an NFD label fails validation. Gold label order is not constrained here; only predictions must follow LS order (FR-T2-01).",
+  "x-contract-version": "0.1.0",
+  "x-status": "observed",
+  "x-source": ["sample_dataset/task2_error_taxonomy.json", "sample_dataset/label_space.json", "03 §2.1", "02 §6.1"],
+  "type": "object",
+  "required": ["task", "description", "input_fields", "output_fields", "metric", "n_samples", "samples"],
+  "additionalProperties": true,
+  "properties": {
+    "task": { "type": "string", "minLength": 1, "examples": ["task2_error_taxonomy"] },
+    "description": { "type": "string" },
+    "label_space": {
+      "description": "Optional in pydantic (TaskFile.label_space, T2 only); when present it must equal label_space.json -> taxonomy_error, in LS order.",
+      "const": [
+        "Lỗi biên dịch",
+        "Lỗi nhập/xuất",
+        "Lỗi logic",
+        "Lỗi vòng lặp",
+        "Lỗi mảng/chuỗi",
+        "Lỗi hàm",
+        "Lỗi edge case",
+        "Lỗi thuật toán",
+        "Lỗi hard-code",
+        "Lỗi style"
+      ]
+    },
+    "input_fields": { "type": "array", "items": { "type": "string" } },
+    "output_fields": { "type": "array", "items": { "type": "string" } },
+    "metric": { "type": "string" },
+    "n_samples": { "type": "integer", "minimum": 0 },
+    "samples": { "type": "array", "items": { "$ref": "#/$defs/Sample" } }
+  },
+  "$defs": {
+    "SampleId": { "type": "string", "pattern": "^EX[0-9]{2}-S[0-9]{3}$" },
+    "ExamType": { "enum": ["multi_problem", "single_problem"] },
+    "TaxonomyLabel": {
+      "enum": [
+        "Lỗi biên dịch",
+        "Lỗi nhập/xuất",
+        "Lỗi logic",
+        "Lỗi vòng lặp",
+        "Lỗi mảng/chuỗi",
+        "Lỗi hàm",
+        "Lỗi edge case",
+        "Lỗi thuật toán",
+        "Lỗi hard-code",
+        "Lỗi style"
+      ]
+    },
+    "Sample": {
+      "type": "object",
+      "required": ["sample_id", "input"],
+      "additionalProperties": false,
+      "properties": {
+        "sample_id": { "$ref": "#/$defs/SampleId" },
+        "input": { "$ref": "#/$defs/T12Input" },
+        "output": { "anyOf": [{ "$ref": "#/$defs/T2Output" }, { "type": "null" }] }
+      }
+    },
+    "T12Input": {
+      "type": "object",
+      "description": "Identical to Task 1 input (FR-ING-04). Never contains feedback, level or labels (BR-21).",
+      "required": ["exam_id", "exam_type", "language", "code_file", "compile_log"],
+      "additionalProperties": false,
+      "properties": {
+        "exam_id": { "type": "string", "pattern": "^EX[0-9]{2}$" },
+        "exam_type": { "$ref": "#/$defs/ExamType" },
+        "language": { "type": "string", "minLength": 1, "examples": ["cpp11"] },
+        "code_file": { "type": "string", "pattern": "^submissions/EX[0-9]{2}/EX[0-9]{2}-S[0-9]{3}\\.cpp$" },
+        "compile_log": { "type": "string", "maxLength": 2000 },
+        "test_report": { "type": ["array", "null"], "items": { "$ref": "#/$defs/ReportedCase" } }
+      },
+      "not": {
+        "anyOf": [
+          { "required": ["feedback"] },
+          { "required": ["target_feedback_level"] },
+          { "required": ["taxonomy_error"] }
+        ]
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "exam_type": { "const": "multi_problem" } }, "required": ["exam_type"] },
+          "then": { "properties": { "test_report": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "exam_type": { "const": "single_problem" } }, "required": ["exam_type"] },
+          "then": { "properties": { "test_report": { "type": "array" } } }
+        }
+      ]
+    },
+    "ReportedCase": {
+      "type": "object",
+      "required": ["input", "expected", "actual", "passed"],
+      "additionalProperties": false,
+      "properties": {
+        "input": { "type": "string" },
+        "expected": { "type": "string" },
+        "actual": { "type": "string" },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "T2Output": {
+      "type": "object",
+      "description": "Multi-label output; [] is valid (BR-13); no duplicates (BR-12).",
+      "required": ["taxonomy_error"],
+      "additionalProperties": false,
+      "properties": {
+        "taxonomy_error": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TaxonomyLabel" },
+          "uniqueItems": true,
+          "maxItems": 10
+        }
+      }
+    }
+  }
+}

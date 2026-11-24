@@ -1,0 +1,225 @@
+{
+ "schema_version": 1,
+ "diagram_type": "dataflow",
+ "meta": {
+  "title": "Pipeline chấm C++ cho leaderboard (T1 · T2 · T3)",
+  "quality_profile": "showcase",
+  "viewBox": [
+   1080,
+   580
+  ]
+ },
+ "stages": [
+  {
+   "label": "Đầu vào"
+  },
+  {
+   "label": "Tín hiệu tất định"
+  },
+  {
+   "label": "LLM chấm T1+T2"
+  },
+  {
+   "label": "Hậu xử lý + T3"
+  },
+  {
+   "label": "Kiểm tra + nộp"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "submission",
+   "type": "frontend",
+   "label": "Bài nộp",
+   "sublabel": "code, log, test",
+   "stage": 0,
+   "row": 0,
+   "tag": "JSON",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "exam",
+   "type": "database",
+   "label": "Đề + rubric",
+   "sublabel": "taxonomy 10 nhãn",
+   "stage": 0,
+   "row": 2,
+   "tag": "meta",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "signals",
+   "type": "backend",
+   "label": "Signal extractor",
+   "sublabel": "gcc · test verdict · regex",
+   "stage": 1,
+   "row": 0,
+   "tag": "no LLM",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "retriever",
+   "type": "database",
+   "label": "Few-shot retriever",
+   "sublabel": "cùng đề, kNN embedding",
+   "stage": 1,
+   "row": 2,
+   "tag": "train set",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "grader",
+   "type": "cloud",
+   "label": "Grader LLM",
+   "sublabel": "T1 điểm + T2 nhãn",
+   "stage": 2,
+   "row": 0,
+   "tag": "JSON schema",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "feedback",
+   "type": "cloud",
+   "label": "Feedback LLM",
+   "sublabel": "T3 theo level L1–L4",
+   "stage": 3,
+   "row": 2,
+   "tag": "VI",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "calibrate",
+   "type": "security",
+   "label": "Calibrator + rule",
+   "sublabel": "luật rubric + ngưỡng",
+   "stage": 3,
+   "row": 0,
+   "tag": "QWK/F1",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "guard",
+   "type": "security",
+   "label": "Level guard",
+   "sublabel": "leak code, độ dài",
+   "stage": 4,
+   "row": 2,
+   "tag": "retry",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "predictions",
+   "type": "database",
+   "label": "predictions.jsonl",
+   "sublabel": "schema đã validate",
+   "stage": 4,
+   "row": 0,
+   "tag": "leaderboard",
+   "width": 136,
+   "height": 72
+  }
+ ],
+ "flows": [
+  {
+   "id": "f-sig",
+   "from": "submission",
+   "to": "signals",
+   "label": "code + log",
+   "variant": "emphasis"
+  },
+  {
+   "id": "f-ret",
+   "from": "exam",
+   "to": "retriever",
+   "label": "exam_id"
+  },
+  {
+   "id": "f-grade",
+   "from": "signals",
+   "to": "grader",
+   "label": "features",
+   "variant": "emphasis",
+   "route": "straight"
+  },
+  {
+   "id": "f-shots",
+   "from": "retriever",
+   "to": "grader",
+   "label": "k ví dụ",
+   "variant": "dashed"
+  },
+  {
+   "id": "f-cal",
+   "from": "grader",
+   "to": "calibrate",
+   "label": "điểm thô",
+   "variant": "emphasis"
+  },
+  {
+   "id": "f-fb",
+   "from": "calibrate",
+   "to": "feedback",
+   "label": "nhãn đã chốt",
+   "labelAt": [
+    745,
+    232
+   ]
+  },
+  {
+   "id": "f-out1",
+   "from": "calibrate",
+   "to": "predictions",
+   "label": "T1 + T2",
+   "variant": "emphasis"
+  },
+  {
+   "id": "f-guard",
+   "from": "feedback",
+   "to": "guard",
+   "label": "draft"
+  },
+  {
+   "id": "f-out2",
+   "from": "guard",
+   "to": "predictions",
+   "label": "T3"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "emerald",
+   "title": "Tất định trước, LLM sau",
+   "items": [
+    "Compile gate quyết định 1–2 chiều rubric, không tốn token",
+    "Test verdict (fail toàn bộ) cho io_format F1 0.80 sau sửa nhãn",
+    "LLM chỉ chấm phần cần đọc hiểu: logic, edge, quality"
+   ]
+  },
+  {
+   "dot": "violet",
+   "title": "Dùng chung API và self-host",
+   "items": [
+    "Cùng prompt, cùng JSON schema, cùng calibrator",
+    "Đổi backend qua một client OpenAI-compatible (vLLM)",
+    "Eval harness duy nhất cho QWK, macro-F1, level compliance"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "Điểm yếu đã biết",
+   "items": [
+    "Nhãn gold nhiễu (S211, S214, S216)",
+    "EX01 multi_problem: chấm từng hàm, dễ lệch",
+    "32 mẫu: calibrate dễ overfit, cần CV theo đề"
+   ]
+  }
+ ]
+}

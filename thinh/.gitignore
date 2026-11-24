@@ -1,0 +1,11 @@
+# Real anonymized student data and anything that embeds it -- course rules forbid a public repo.
+# Put the dataset at thinh/sample_dataset/ locally (scripts resolve it there); never commit it.
+sample_dataset/
+eda/out/
+eda/viz/input-rubric-eda.html
+eda/viz/gcc-results.json
+eda/t3_manual_annotations.json
+.venv/
+__pycache__/
+.ruff_cache/
+.DS_Store

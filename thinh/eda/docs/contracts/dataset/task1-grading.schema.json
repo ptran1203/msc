@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/dataset/task1-grading.schema.json",
+  "title": "Task 1 task file (rubric grading) - observed",
+  "description": "Observed contract of the organiser file task1_grading.json (sample n = 32). Mirrors 03 §2.1 TaskFile[T12Input, T1Output]. The envelope accepts unknown keys (pydantic extra=\"allow\"); sample, input and output are strict so that the audit reports new fields (e.g. compiles_locally, Q-17) as warnings while the pydantic loader keeps running. Enforced by pydantic only (not expressible here): n_samples == len(samples), unique sample_id, total_score == sum of rubric is NOT enforced on gold (BR-01 is [GT], measured by the audit).",
+  "x-contract-version": "0.1.0",
+  "x-status": "observed",
+  "x-source": ["sample_dataset/task1_grading.json", "03 §2.1", "02 §6.1"],
+  "type": "object",
+  "required": ["task", "description", "input_fields", "output_fields", "metric", "n_samples", "samples"],
+  "additionalProperties": true,
+  "properties": {
+    "task": { "type": "string", "minLength": 1, "examples": ["task1_rubric_grading"] },
+    "description": { "type": "string" },
+    "input_fields": { "type": "array", "items": { "type": "string" } },
+    "output_fields": { "type": "array", "items": { "type": "string" } },
+    "metric": { "type": "string" },
+    "n_samples": { "type": "integer", "minimum": 0 },
+    "samples": { "type": "array", "items": { "$ref": "#/$defs/Sample" } }
+  },
+  "$defs": {
+    "SampleId": {
+      "type": "string",
+      "pattern": "^EX[0-9]{2}-S[0-9]{3}$",
+      "description": "Observed form EXnn-Snnn. The Snnn part is a join/group key only, never a feature (BR-25)."
+    },
+    "ExamType": { "enum": ["multi_problem", "single_problem"] },
+    "Sample": {
+      "type": "object",
+      "required": ["sample_id", "input"],
+      "additionalProperties": false,
+      "properties": {
+        "sample_id": { "$ref": "#/$defs/SampleId" },
+        "input": { "$ref": "#/$defs/T12Input" },
+        "output": {
+          "description": "Gold label. Present on train; absent or null on dev/test (03 §2.1 Sample.output).",
+          "anyOf": [{ "$ref": "#/$defs/T1Output" }, { "type": "null" }]
+        }
+      }
+    },
+    "T12Input": {
+      "type": "object",
+      "description": "Input shared by T1 and T2 (FR-ING-04). Never contains feedback, level or labels (BR-21).",
+      "required": ["exam_id", "exam_type", "language", "code_file", "compile_log"],
+      "additionalProperties": false,
+      "properties": {
+        "exam_id": { "type": "string", "pattern": "^EX[0-9]{2}$" },
+        "exam_type": { "$ref": "#/$defs/ExamType" },
+        "language": { "type": "string", "minLength": 1, "examples": ["cpp11"] },
+        "code_file": {
+          "type": "string",
+          "pattern": "^submissions/EX[0-9]{2}/EX[0-9]{2}-S[0-9]{3}\\.cpp$",
+          "description": "Path relative to the data root (C-18)."
+        },
+        "compile_log": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Required, may be \"\" when the build printed no diagnostic. Observed cut at 2000 characters (EDA §5, data.compile_log_trunc_len, Q-17) [GT]."
+        },
+        "test_report": {
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/ReportedCase" },
+          "description": "null for multi_problem; list for single_problem; [] when the single_problem submission did not build."
+        }
+      },
+      "not": {
+        "anyOf": [
+          { "required": ["feedback"] },
+          { "required": ["target_feedback_level"] },
+          { "required": ["taxonomy_error"] }
+        ]
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "exam_type": { "const": "multi_problem" } }, "required": ["exam_type"] },
+          "then": { "properties": { "test_report": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "exam_type": { "const": "single_problem" } }, "required": ["exam_type"] },
+          "then": { "properties": { "test_report": { "type": "array" } } }
+        }
+      ]
+    },
+    "ReportedCase": {
+      "type": "object",
+      "description": "One public test as reported by the organiser. actual is whitespace-stripped (BR-11); \"<TIMEOUT>\" means timeout; \"\" may mean a crash.",
+      "required": ["input", "expected", "actual", "passed"],
+      "additionalProperties": false,
+      "properties": {
+        "input": { "type": "string" },
+        "expected": { "type": "string" },
+        "actual": { "type": "string" },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "T1Output": {
+      "type": "object",
+      "required": ["rubric", "total_score"],
+      "additionalProperties": false,
+      "properties": {
+        "rubric": { "$ref": "#/$defs/Rubric" },
+        "total_score": { "type": "integer", "minimum": 0, "maximum": 10 }
+      }
+    },
+    "Rubric": {
+      "type": "object",
+      "description": "Six rubric dimensions with domains of BR-02 (pydantic extra=\"forbid\", strict int).",
+      "required": ["compilable", "io_format", "logic", "edge_case", "complexity", "code_quality"],
+      "additionalProperties": false,
+      "properties": {
+        "compilable": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "io_format": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "logic": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "edge_case": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "complexity": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "code_quality": { "type": "integer", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

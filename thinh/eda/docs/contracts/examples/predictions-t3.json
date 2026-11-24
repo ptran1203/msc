@@ -1,0 +1,6 @@
+[
+  {"sample_id": "EX01-S999", "output": {"feedback": "Em đã đọc được file và tạo được danh sách liên kết theo đúng thứ tự. Hàm prob3 hiện chưa được viết nên chương trình chưa tìm được vị tướng nhiều tuổi nhất. Trong prob1, đường dẫn file đang được viết cố định nên tham số filename không được sử dụng; khi chấm với một tên file khác, hàm sẽ không đọc được dữ liệu."}},
+  {"sample_id": "EX02-S997", "output": {"feedback": "Bài làm của em rất tốt: chương trình cho kết quả đúng với các test công khai và trình bày gọn gàng. Em có thể tự thử thêm vài số lớn gần giới hạn của đề để kiểm tra lại."}},
+  {"sample_id": "EX02-S998", "output": {"feedback": "Bài của em hiện chưa biên dịch được. Em hãy đọc kỹ thông báo của trình biên dịch và rà soát lại chương trình một lượt nhé."}},
+  {"sample_id": "EX02-S999", "output": {"feedback": "Phần tách chữ số và cộng luỹ thừa của em đã cho kết quả đúng với các số có nhiều chữ số.\nCó hai điểm cần xem lại: chương trình in thêm lời nhắc nhập liệu trước kết quả nên output không khớp định dạng đề yêu cầu; và khi n chỉ có một chữ số, hàm kiểm tra đi hết thân mà không trả về giá trị nào nên chương trình dừng bất thường.\nHướng sửa: em bỏ phần in lời nhắc và bảo đảm mọi nhánh của hàm kiểm tra đều trả về một kết quả đúng hoặc sai."}}
+]

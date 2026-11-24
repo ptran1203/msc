@@ -1,0 +1,13 @@
+{
+  "sample_id": "EX02-S999",
+  "exam_id": "EX02",
+  "exam_type": "single_problem",
+  "language": "cpp11",
+  "code": "#include <iostream>\nusing namespace std;\n\nbool isArmstrong(int n) {\n    int digits = 0, t = n;\n    while (t > 0) { digits++; t /= 10; }\n    if (n >= 10) {\n        long long s = 0; t = n;\n        while (t > 0) {\n            int d = t % 10; long long p = 1;\n            for (int i = 0; i < digits; i++) p *= d;\n            s += p; t /= 10;\n        }\n        return s == n;\n    }\n}\n\nint main() {\n    int n;\n    cin >> n;\n    bool ok = isArmstrong(n);\n    cout << \"Nhap n: \" << (ok ? \"True\" : \"False\") << endl;\n    return 0;\n}\n",
+  "compile_log": "student.cpp: In function 'bool isArmstrong(int)':\nstudent.cpp:16:1: warning: control reaches end of non-void function [-Wreturn-type]\n",
+  "options": {"evidence_mode": "full", "policy_variant": "written_policy", "include_evidence_card": false},
+  "feedback_target": {
+    "target_feedback_level": "Level 2 - Chẩn đoán",
+    "taxonomy_error": ["Lỗi nhập/xuất", "Lỗi hàm"]
+  }
+}

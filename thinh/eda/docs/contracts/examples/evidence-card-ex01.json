@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "sample_id": "EX01-S999",
+  "exam_id": "EX01",
+  "exam_type": "multi_problem",
+  "code_sha": "8e1f2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b",
+  "toolchain_id": "a1b2c3d4e5f6",
+  "evidence_mode": "full",
+  "missing_code": false,
+  "compile_given": {
+    "log_has_error": false,
+    "log_has_link_error": false,
+    "log_build_failed": false,
+    "log_warning_only": false,
+    "log_truncated": false,
+    "n_errors": 0,
+    "n_errors_is_lower_bound": false,
+    "n_warnings": 0,
+    "error_lines": []
+  },
+  "compile_rebuild": {
+    "toolchain_id": "a1b2c3d4e5f6",
+    "profile": "gcc13-O0",
+    "returncode": 0,
+    "has_error": false,
+    "link_error": false,
+    "build_failed": false,
+    "warnings": [],
+    "truncated_log": "",
+    "agrees_with_given": true
+  },
+  "tests_source": "none",
+  "tests_sha": null,
+  "run": null,
+  "static": {
+    "n_lines": 74,
+    "effective_code_lines": 61,
+    "commented_out_ratio": 0.05,
+    "max_commented_block": 4,
+    "all_commented": false,
+    "has_main": false,
+    "functions_present": {
+      "P1": {"present": true, "prototype_match": true, "empty_or_stub": false, "n_statements": 14, "suspect_infinite_loop": false},
+      "P2": {"present": true, "prototype_match": true, "empty_or_stub": false, "n_statements": 9, "suspect_infinite_loop": false},
+      "P3": {"present": false, "prototype_match": false, "empty_or_stub": false, "n_statements": 0, "suspect_infinite_loop": false},
+      "P4": {"present": true, "prototype_match": true, "empty_or_stub": true, "n_statements": 0, "suspect_infinite_loop": false}
+    },
+    "disallowed_includes": ["vector"],
+    "forbidden_calls": [],
+    "hardcode_fixed_path": true,
+    "hardcode_cin_instead_of_file": false,
+    "hardcode_fixed_array_size": false
+  },
+  "cluster_id": "c0a1b2c3d4e",
+  "cluster_size": 1,
+  "problem_status": {
+    "split_failed": false,
+    "by_pid": {
+      "P1": {"correct": 0.7, "partial": 0.2, "wrong": 0.1, "missing": 0.0},
+      "P2": {"correct": 0.6, "partial": 0.3, "wrong": 0.1, "missing": 0.0},
+      "P3": {"correct": 0.0, "partial": 0.0, "wrong": 0.0, "missing": 1.0},
+      "P4": {"correct": 0.0, "partial": 0.0, "wrong": 0.0, "missing": 1.0}
+    }
+  },
+  "policy": {
+    "hard_score": 5.0,
+    "soft_score": 3.2,
+    "prereq_failed": false,
+    "n_missing": 2,
+    "zero_clause_hits": ["rule_violation"]
+  },
+  "text": "EX01 multi_problem | compile (syntax_only): ok | functions: P1 present, P2 present, P3 missing, P4 stub | include outside allowed list: vector | hard-code: fixed file path | P(correct): P1 0.70, P2 0.60 | policy features: hard 5.0, soft 3.2, prereq_failed false, zero-clause hit rule_violation"
+}

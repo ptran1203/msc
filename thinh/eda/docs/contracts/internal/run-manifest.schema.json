@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/internal/run-manifest.schema.json",
+  "title": "Run manifest v1.0 (runs/<run_id>/manifest.json)",
+  "description": "Contract for the manifest written by rep/manifest.py for every command (FR-REP-02, FR-REP-04, NFR-OBS-01). 03 §3.10 lists the content but defines no pydantic model in §2, so field names here are proposed (see 06 §7). Every item TC-REP-06 checks (lockfile hash, engine version, image digests, folds sha, cost, GPU hours) is a required key; null means not applicable to this command, never 'forgot to record'. Secrets are masked: config is the Settings dump with SecretStr rendered as \"**********\" (NFR-SEC-02). A replay_only run that succeeded must report zero live calls (03 §3.10).",
+  "x-contract-version": "0.1.0",
+  "x-status": "internal",
+  "x-pydantic": "grader.rep.manifest:RunManifest (proposed)",
+  "type": "object",
+  "required": [
+    "schema_version", "contract_version", "run_id", "command", "status", "exit_code", "started_at",
+    "finished_at", "git", "lockfile_sha256", "config_profile", "config_sha256", "config", "data",
+    "folds_sha256", "models", "engine", "docker", "global_seed", "hardware", "stage_seconds",
+    "gpu_hours", "api_cost_usd", "cache", "live_calls", "outputs", "private_run"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "contract_version": { "$ref": "#/$defs/SemVer" },
+    "run_id": { "$ref": "#/$defs/RunId" },
+    "command": {
+      "enum": ["smoke", "audit", "bonus", "features", "evd", "folds", "train", "eval", "predict", "predict-private", "submit", "reproduce", "ablation", "report", "serve"],
+      "description": "Typer command of 03 §4; 'evd' covers 'grader evd calibrate' and 'grader evd calibrate-neardup' (03 §3.2); 'serve' only for the optional REST service."
+    },
+    "args": { "type": "object", "additionalProperties": true, "description": "CLI arguments, no secrets, no data content." },
+    "status": { "enum": ["running", "ok", "error"] },
+    "exit_code": { "type": ["integer", "null"], "minimum": 0, "maximum": 6, "description": "null while status = running." },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": ["string", "null"], "format": "date-time", "description": "null while status = running." },
+    "lockfile_sha256": { "$ref": "#/$defs/Sha256", "description": "sha256 of uv.lock used by this run (FR-REP-02, TC-REP-06); env.json keeps the same value." },
+    "git": {
+      "type": "object",
+      "required": ["sha", "dirty", "tag"],
+      "additionalProperties": false,
+      "properties": {
+        "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "dirty": { "type": "boolean" },
+        "tag": { "type": ["string", "null"] }
+      }
+    },
+    "config_profile": { "type": "string", "examples": ["default", "fast", "final"] },
+    "config_sha256": { "$ref": "#/$defs/Sha256" },
+    "config": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "sec": {
+          "type": "object",
+          "properties": {
+            "api_key": { "anyOf": [{ "type": "null" }, { "const": "**********" }] }
+          }
+        }
+      }
+    },
+    "data": {
+      "type": "object",
+      "required": ["split", "root_manifest_sha256", "n_samples"],
+      "additionalProperties": false,
+      "properties": {
+        "split": { "enum": ["sample", "train", "dev", "private", "none"] },
+        "root_manifest_sha256": { "anyOf": [{ "$ref": "#/$defs/Sha256" }, { "type": "null" }] },
+        "n_samples": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "folds_sha256": { "anyOf": [{ "$ref": "#/$defs/Sha256" }, { "type": "null" }] },
+    "models": { "type": "array", "items": { "$ref": "#/$defs/ModelPin" } },
+    "engine": {
+      "description": "LLM engine and version (engine_version is part of the LLM cache key, 03 §3.10); null for commands that load no model.",
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["name", "version"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string", "examples": ["vllm", "transformers"] },
+            "version": { "type": "string", "minLength": 1 }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "docker": {
+      "description": "Image digests; null only when Docker is not used at all (clean-machine replay, Q-25).",
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["app_digest", "sandbox_digest"],
+          "additionalProperties": false,
+          "properties": {
+            "app_digest": { "anyOf": [{ "$ref": "#/$defs/ImageDigest" }, { "type": "null" }] },
+            "sandbox_digest": { "anyOf": [{ "$ref": "#/$defs/ImageDigest" }, { "type": "null" }] }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "toolchain_id": { "type": ["string", "null"], "pattern": "^[0-9a-f]{12}$" },
+    "global_seed": { "type": "integer" },
+    "hardware": {
+      "type": "object",
+      "required": ["cpu", "gpu", "gpu_count"],
+      "additionalProperties": false,
+      "properties": {
+        "cpu": { "type": "string" },
+        "gpu": { "type": ["string", "null"] },
+        "gpu_count": { "type": "integer", "minimum": 0 },
+        "vram_gb": { "type": ["number", "null"], "minimum": 0 },
+        "peak_vram_gb": { "type": ["number", "null"], "minimum": 0 },
+        "driver": { "type": ["string", "null"] },
+        "cuda": { "type": ["string", "null"] }
+      }
+    },
+    "stage_seconds": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } },
+    "gpu_hours": { "type": ["number", "null"], "minimum": 0, "description": "null when no GPU was used (NFR-COST-02)." },
+    "api_cost_usd": { "type": ["number", "null"], "minimum": 0, "description": "0 when egress is off; null only while status = running (NFR-COST-01)." },
+    "cache": {
+      "type": "object",
+      "required": ["mode", "llm_hits", "llm_misses", "evidence_hits", "evidence_misses"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["read_write", "replay_only", "refresh"] },
+        "llm_hits": { "type": "integer", "minimum": 0 },
+        "llm_misses": { "type": "integer", "minimum": 0 },
+        "evidence_hits": { "type": "integer", "minimum": 0 },
+        "evidence_misses": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "live_calls": {
+      "type": "object",
+      "required": ["llm_live_calls", "f_arm_live_calls", "judge_live_calls", "sandbox_runs"],
+      "additionalProperties": false,
+      "properties": {
+        "llm_live_calls": { "type": "integer", "minimum": 0 },
+        "f_arm_live_calls": { "type": "integer", "minimum": 0 },
+        "judge_live_calls": { "type": "integer", "minimum": 0 },
+        "sandbox_runs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "description": "Relative to runs/<run_id>/." },
+          "sha256": { "$ref": "#/$defs/Sha256" }
+        }
+      }
+    },
+    "touched_feedback": { "type": "boolean", "description": "OR over the lineage of every artefact used by this run (FR-SEC-01 (c))." },
+    "private_run": { "type": "boolean", "description": "true only inside PrivateRun (FR-SEC-05)." }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "running" } }, "required": ["status"] },
+      "then": { "properties": { "exit_code": { "type": "null" }, "finished_at": { "type": "null" } } },
+      "else": { "properties": { "exit_code": { "type": "integer" }, "finished_at": { "type": "string" } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "ok" } }, "required": ["status"] },
+      "then": { "properties": { "exit_code": { "const": 0 } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "error" } }, "required": ["status"] },
+      "then": { "properties": { "exit_code": { "minimum": 1 } } }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "ok" }, "cache": { "properties": { "mode": { "const": "replay_only" } } } },
+        "required": ["status", "cache"]
+      },
+      "then": {
+        "properties": {
+          "live_calls": {
+            "properties": {
+              "llm_live_calls": { "const": 0 },
+              "f_arm_live_calls": { "const": 0 },
+              "judge_live_calls": { "const": 0 },
+              "sandbox_runs": { "const": 0 }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "SemVer": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+    "RunId": { "type": "string", "pattern": "^[0-9]{8}T[0-9]{6}-[0-9a-f]{7}-[0-9a-f]{6}$", "description": "<UTC %Y%m%dT%H%M%S>-<git_sha7>-<config_sha6> (03 §3.10)." },
+    "Sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "ImageDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "ModelPin": {
+      "type": "object",
+      "required": ["role", "model_id", "revision", "adapter_sha256", "touched_feedback"],
+      "additionalProperties": false,
+      "properties": {
+        "role": { "type": "string", "examples": ["p_arm", "f_arm_t1t2", "t3_a3", "judge", "teacher", "embedding"] },
+        "model_id": { "type": "string", "minLength": 1, "examples": ["Qwen/Qwen3-8B"] },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "Pinned commit; aliases such as 'latest' are rejected." },
+        "adapter_sha256": { "anyOf": [{ "$ref": "#/$defs/Sha256" }, { "type": "null" }] },
+        "touched_feedback": { "type": "boolean" }
+      }
+    }
+  }
+}

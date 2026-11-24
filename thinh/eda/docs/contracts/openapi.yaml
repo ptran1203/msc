@@ -1,0 +1,970 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: Grader inference service (optional)
+  version: 0.1.0
+  summary: Optional REST facade over the batch grading pipeline (T1 rubric, T2 error taxonomy, T3 level-controlled feedback).
+  description: |
+    Status: proposed, optional. The challenge pipeline (system 1) stays the batch CLI of
+    03 §4 (`make predict`, `make predict-private`). This API serves the teacher-assistant
+    context (system 2, SRS §1.2) and demos. It reuses the same Settings, caches, evidence
+    builder, feedback firewall and guard as the CLI and adds no model behaviour. Started by
+    `grader serve` (proposed command), synchronous handlers (PY-00 proposal, Q-22).
+
+    Contract rules
+    - Contract version = info.version (semver, 06 §3). Every response carries it in the
+      `X-Contract-Version` header; result bodies also carry `versions.contract_version`.
+    - Feedback firewall (BR-21, FR-ING-05, FR-SEC-01): `/v1/evidence`, `/v1/grade`,
+      `/v1/classify` reject any `feedback`, `target_feedback_level`, `level`,
+      `taxonomy_error` or `labels` key with 422. The server builds a BlindSample from a
+      whitelist; the engine refuses adapters with `touched_feedback = true` for T1/T2.
+    - `/v1/feedback` carries the given labels and the target level and never `test_report`
+      while Q-14 is unanswered (BR-23). Its evidence card is built from
+      `ProblemCard.public_tests` (`tests_source = public_tests`) or has no run
+      (`tests_source = none`); a card built from a client `test_report` is never used for T3
+      (06 §1.5).
+    - Security: bearer token issued by the school, internal network only. The service runs
+      offline (egress allowlist empty, HF/Transformers offline variables, NFR-PRIV-02),
+      never logs source code, compile logs, prompts or feedback (sha1 only, LogSafeFilter,
+      NFR-PRIV-03) and runs student code only in the sandbox of 03 §3.2 (FR-SEC-02).
+    - Limits: body <= 256 KiB (413), `code` <= 65 536 characters, `compile_log` <= 2 000
+      characters (same cut as the dataset), `test_report` <= 64 cases. One GPU engine
+      serialises work; a full queue answers 503 with `Retry-After`.
+    - Rate limit (note): per token, default 30 requests/minute, advertised with
+      `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (IETF draft
+      httpapi-ratelimit-headers); excess answers 429 with `Retry-After`.
+    - Idempotency: POST accepts `Idempotency-Key`. Same key + same body sha256 within the
+      retention window (default 24 h) replays the stored response with
+      `Idempotent-Replayed: true`; same key + different body answers 409.
+    - Errors: RFC 9457 `application/problem+json`. Exception (03 §6.2) -> CLI exit code ->
+      HTTP status mapping is in 06 §4.
+    - Human review: the AI never finalises a score (BA §9.3). `review.needs_review` and
+      `review.reasons` route the item to deep review; `review.blind_audit` asks the client
+      UI to hide AI scores.
+    - Schemas: reusable data shapes are referenced from the JSON Schema files next to this
+      document (relative `$ref`); request/response envelopes are defined here.
+  license:
+    name: Internal course project, not for redistribution
+servers:
+  - url: http://127.0.0.1:8080
+    description: Loopback or school-internal network only.
+security:
+  - bearerAuth: []
+tags:
+  - name: ops
+    description: Health and build information.
+  - name: evidence
+    description: Deterministic evidence card (FR-EVD-01).
+  - name: grading
+    description: T1, T2, T3 and the combined assessment.
+paths:
+  /healthz:
+    get:
+      tags: [ops]
+      operationId: getHealth
+      summary: Liveness and readiness.
+      security: []
+      responses:
+        '200':
+          description: Ready (status ok, or degraded when the sandbox is down and only given_signals_only is served).
+          headers:
+            X-Contract-Version: {$ref: '#/components/headers/XContractVersion'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/HealthResponse'}
+              examples:
+                ok: {externalValue: examples/api-healthz-response.json}
+        '503':
+          description: Starting, or a required check failed (engine, cache, label space; ConfigError at startup).
+          headers:
+            X-Contract-Version: {$ref: '#/components/headers/XContractVersion'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/HealthResponse'}
+  /v1/info:
+    get:
+      tags: [ops]
+      operationId: getInfo
+      summary: Model id and revision, adapter sha, config sha, toolchain digest, contract version.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Build and pin information (FR-REP-02, FR-REP-04).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+            X-Contract-Version: {$ref: '#/components/headers/XContractVersion'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InfoResponse'}
+              examples:
+                default: {externalValue: examples/api-info-response.json}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /v1/evidence:
+    post:
+      tags: [evidence]
+      operationId: buildEvidence
+      summary: Build the evidence card for one submission (no LLM call except problem status for multi_problem).
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BlindRequest'}
+            examples:
+              ex02: {externalValue: examples/api-evidence-request.json}
+      responses:
+        '200':
+          description: Evidence card v1.0.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+            X-Contract-Version: {$ref: '#/components/headers/XContractVersion'}
+            RateLimit-Limit: {$ref: '#/components/headers/RateLimitLimit'}
+            RateLimit-Remaining: {$ref: '#/components/headers/RateLimitRemaining'}
+            RateLimit-Reset: {$ref: '#/components/headers/RateLimitReset'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EvidenceResponse'}
+              examples:
+                ex02: {externalValue: examples/api-evidence-response.json}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '422': {$ref: '#/components/responses/UnprocessableContent'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /v1/grade:
+    post:
+      tags: [grading]
+      operationId: gradeSubmission
+      summary: Task 1 - six rubric dimensions and total (FR-T1-01).
+      description: |
+        Runs ING -> EVD -> POL -> T1 on a BlindSample. `options.policy_variant` selects FR-POL-03
+        variant (a) gold_optimized, (b) written_policy (default for system 2, SRS §1.3) or hybrid.
+        `result.gate_source` tells whether the compile-error gate came from the exam or the
+        exam_type default (Q-26).
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BlindRequest'}
+            examples:
+              ex02: {externalValue: examples/api-grade-request.json}
+      responses:
+        '200':
+          description: Graded.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+            X-Contract-Version: {$ref: '#/components/headers/XContractVersion'}
+            RateLimit-Limit: {$ref: '#/components/headers/RateLimitLimit'}
+            RateLimit-Remaining: {$ref: '#/components/headers/RateLimitRemaining'}
+            RateLimit-Reset: {$ref: '#/components/headers/RateLimitReset'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GradeResponse'}
+              examples:
+                ex02: {externalValue: examples/api-grade-response.json}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '422': {$ref: '#/components/responses/UnprocessableContent'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /v1/classify:
+    post:
+      tags: [grading]
+      operationId: classifyErrors
+      summary: Task 2 - multi-label error taxonomy (FR-T2-01).
+      description: |
+        Same request as /v1/grade (T1 and T2 inputs are identical, FR-ING-04). The server runs T1
+        internally because the cross constraint needs the predicted total (FR-T2-06, BR-14);
+        `t1_total_used` reports it. Labels are NFC, unique, in label-space order.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BlindRequest'}
+            examples:
+              ex02: {externalValue: examples/api-classify-request.json}
+      responses:
+        '200':
+          description: Classified.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+            X-Contract-Version: {$ref: '#/components/headers/XContractVersion'}
+            RateLimit-Limit: {$ref: '#/components/headers/RateLimitLimit'}
+            RateLimit-Remaining: {$ref: '#/components/headers/RateLimitRemaining'}
+            RateLimit-Reset: {$ref: '#/components/headers/RateLimitReset'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ClassifyResponse'}
+              examples:
+                ex02: {externalValue: examples/api-classify-response.json}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '422': {$ref: '#/components/responses/UnprocessableContent'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /v1/feedback:
+    post:
+      tags: [grading]
+      operationId: generateFeedback
+      summary: Task 3 - Vietnamese feedback at the requested level, labels given (FR-T3-01).
+      description: |
+        Runs ING -> EVD -> T3 (diagnose, grounding, render) -> GRD guard with fixed retry seeds and
+        level-correct template fallback (FR-GRD-06). Uses CondSample only; never reads T1/T2
+        outputs. The evidence card is built from `ProblemCard.public_tests` re-run in the sandbox
+        (`evidence.tests_source = public_tests`) or has no run (`none`); it never reuses the
+        card of /v1/grade or /v1/classify, which is keyed by another `tests_sha` (06 §1.5).
+        L4 code is attached only when verified on public tests; otherwise
+        `guard.l4_unverified = true` (FR-T3-03).
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/FeedbackRequest'}
+            examples:
+              ex02-l2: {externalValue: examples/api-feedback-request.json}
+      responses:
+        '200':
+          description: Feedback generated and guarded.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+            X-Contract-Version: {$ref: '#/components/headers/XContractVersion'}
+            RateLimit-Limit: {$ref: '#/components/headers/RateLimitLimit'}
+            RateLimit-Remaining: {$ref: '#/components/headers/RateLimitRemaining'}
+            RateLimit-Reset: {$ref: '#/components/headers/RateLimitReset'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FeedbackResponse'}
+              examples:
+                ex02-l2: {externalValue: examples/api-feedback-response.json}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '422': {$ref: '#/components/responses/UnprocessableContent'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /v1/assess:
+    post:
+      tags: [grading]
+      operationId: assessSubmission
+      summary: Combined T1 + T2 (+ T3 when feedback_target is given) in one request.
+      description: |
+        Convenience endpoint for system 2. The T1/T2 part is computed from the BlindSample only;
+        `feedback_target` is read only by T3. When `feedback_target.taxonomy_error` is absent, T3
+        uses the T2 prediction and the response sets `labels_source = predicted` (allowed only in
+        system 2; the challenge pipeline never chains T2 -> T3).
+        Evidence: T1/T2 use the card built from the client `test_report` when one is sent
+        (`tests_source = given_report`); T3 always uses its own card built from
+        `ProblemCard.public_tests` or without run (06 §1.5). Without `test_report` both parts
+        share the public-tests card, as in the example. `evidence` summarises the T1/T2 card.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AssessRequest'}
+            examples:
+              ex02-l2: {externalValue: examples/api-assess-request.json}
+      responses:
+        '200':
+          description: Assessed.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+            X-Contract-Version: {$ref: '#/components/headers/XContractVersion'}
+            RateLimit-Limit: {$ref: '#/components/headers/RateLimitLimit'}
+            RateLimit-Remaining: {$ref: '#/components/headers/RateLimitRemaining'}
+            RateLimit-Reset: {$ref: '#/components/headers/RateLimitReset'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AssessResponse'}
+              examples:
+                ex02-l2: {externalValue: examples/api-assess-response.json}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '422': {$ref: '#/components/responses/UnprocessableContent'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: Opaque token issued by the school; stored as SecretStr in Settings; never logged.
+  parameters:
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      description: Client correlation id; generated (UUID) when absent and echoed in the response and in log.jsonl.
+      schema: {type: string, pattern: '^[A-Za-z0-9._-]{8,64}$'}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Replays the stored response for the same key and body sha256; different body -> 409.
+      schema: {type: string, pattern: '^[A-Za-z0-9._-]{8,128}$'}
+  headers:
+    XRequestId:
+      description: Correlation id of this request.
+      schema: {type: string}
+    XContractVersion:
+      description: Contract version (semver) implemented by the server.
+      schema: {type: string, pattern: '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'}
+    RateLimitLimit:
+      description: Request quota of the current window for this token (IETF draft httpapi-ratelimit-headers); default 30 per minute.
+      schema: {type: integer, minimum: 1}
+    RateLimitRemaining:
+      description: Remaining requests in the current window (IETF draft httpapi-ratelimit-headers).
+      schema: {type: integer, minimum: 0}
+    RateLimitReset:
+      description: Seconds until the current window resets (IETF draft httpapi-ratelimit-headers).
+      schema: {type: integer, minimum: 0}
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema: {type: integer, minimum: 1}
+  responses:
+    BadRequest:
+      description: Body is not valid JSON or not UTF-8 (problem type malformed-request).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    Unauthorized:
+      description: Missing or invalid bearer token (problem type unauthorized).
+      headers:
+        WWW-Authenticate:
+          schema: {type: string}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    Forbidden:
+      description: Request blocked by the feedback firewall at runtime (FirewallViolation) or touches an isolated split (TestIsolationError).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    Conflict:
+      description: Idempotency-Key reused with another body or still in progress (idempotency-conflict), or cache miss in replay_only mode (CacheMissError).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    PayloadTooLarge:
+      description: Body over max_body_bytes (payload-too-large).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    UnsupportedMediaType:
+      description: Content-Type is not application/json (unsupported-media-type).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    UnprocessableContent:
+      description: Body violates the schema, including forbidden firewall fields (DataSchemaError), or refers to an unknown exam / inconsistent exam_type (DataIntegrityError).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+          examples:
+            forbidden-field: {externalValue: examples/api-problem-422.json}
+    TooManyRequests:
+      description: Rate limit exceeded (rate-limited).
+      headers:
+        Retry-After: {$ref: '#/components/headers/RetryAfter'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    InternalError:
+      description: ConfigError, SubmissionFormatError on the response self-check, EgressBlocked, or an unexpected error (no stack trace, no content in the body).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    BadGateway:
+      description: UpstreamError from the local LLM engine (status, host, endpoint kept as observed).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    ServiceUnavailable:
+      description: SandboxError when evidence_mode=full cannot degrade, CostCapExceeded, queue full or starting.
+      headers:
+        Retry-After: {$ref: '#/components/headers/RetryAfter'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    GatewayTimeout:
+      description: Processing exceeded the request deadline (request-timeout); the sandbox keeps its own per-test and per-sample timeouts.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    ExamId:
+      type: string
+      pattern: '^[A-Za-z0-9_-]{1,32}$'
+      description: Must exist in the exam registry loaded at startup (ProblemCard extracted offline, FR-POL-01); unknown -> 422 data-integrity.
+    ClientSampleId:
+      type: string
+      pattern: '^[A-Za-z0-9._-]{1,64}$'
+      description: Optional client key echoed back; never used as a feature (BR-25).
+    SourceCode:
+      type: string
+      maxLength: 65536
+      description: C++ source inline. The server applies FR-ING-02 (strip BOM, NFC text, sha1 of the received UTF-8 bytes) and never logs it.
+    CompileLog:
+      type: string
+      maxLength: 2000
+      description: Optional organiser-style log. Absent = unknown, the server uses its sandbox rebuild (03 §3.4 step 2); "" = build without diagnostics.
+    RequestOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        evidence_mode:
+          enum: [full, given_signals_only]
+          default: full
+          description: given_signals_only never compiles or runs the code (FR-REP-06).
+        policy_variant:
+          enum: [gold_optimized, written_policy, hybrid]
+          default: written_policy
+          description: FR-POL-03 variants (a), (b), hybrid.
+        include_evidence_card:
+          type: boolean
+          default: false
+        include_distribution:
+          type: boolean
+          default: true
+    FeedbackOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        evidence_mode:
+          enum: [full, given_signals_only]
+          default: full
+        include_evidence_card:
+          type: boolean
+          default: false
+    BlindRequest:
+      type: object
+      description: T1/T2/evidence request. Schema-level feedback firewall (additionalProperties false + explicit forbidden keys).
+      required: [exam_id, exam_type, language, code]
+      additionalProperties: false
+      properties:
+        sample_id: {$ref: '#/components/schemas/ClientSampleId'}
+        exam_id: {$ref: '#/components/schemas/ExamId'}
+        exam_type: {$ref: 'internal/blind-sample.schema.json#/$defs/ExamType'}
+        language: {const: cpp11}
+        code: {$ref: '#/components/schemas/SourceCode'}
+        compile_log: {$ref: '#/components/schemas/CompileLog'}
+        test_report:
+          type: [array, 'null']
+          maxItems: 64
+          items: {$ref: 'internal/blind-sample.schema.json#/$defs/ReportedCase'}
+        options: {$ref: '#/components/schemas/RequestOptions'}
+      not:
+        anyOf:
+          - required: [feedback]
+          - required: [target_feedback_level]
+          - required: [level]
+          - required: [taxonomy_error]
+          - required: [labels]
+      allOf:
+        - $ref: '#/components/schemas/CompileLogRequiredWithoutSandbox'
+    CompileLogRequiredWithoutSandbox:
+      description: Without the sandbox the compile gate needs the organiser log (03 §3.4 step 2), so compile_log becomes required.
+      if:
+        required: [options]
+        properties:
+          options:
+            required: [evidence_mode]
+            properties:
+              evidence_mode: {const: given_signals_only}
+      then:
+        required: [compile_log]
+    FeedbackRequest:
+      type: object
+      description: T3 request (CondSample). No test_report while Q-14 is unanswered (BR-23).
+      required: [exam_id, exam_type, language, code, taxonomy_error, target_feedback_level]
+      additionalProperties: false
+      properties:
+        sample_id: {$ref: '#/components/schemas/ClientSampleId'}
+        exam_id: {$ref: '#/components/schemas/ExamId'}
+        exam_type: {$ref: 'internal/blind-sample.schema.json#/$defs/ExamType'}
+        language: {const: cpp11}
+        code: {$ref: '#/components/schemas/SourceCode'}
+        compile_log: {$ref: '#/components/schemas/CompileLog'}
+        taxonomy_error:
+          type: array
+          uniqueItems: true
+          maxItems: 10
+          items: {$ref: 'internal/cond-sample.schema.json#/$defs/TaxonomyLabel'}
+        target_feedback_level: {$ref: 'internal/cond-sample.schema.json#/$defs/Level'}
+        options: {$ref: '#/components/schemas/FeedbackOptions'}
+      not:
+        anyOf:
+          - required: [test_report]
+          - required: [feedback]
+          - required: [level]
+      allOf:
+        - $ref: '#/components/schemas/CompileLogRequiredWithoutSandbox'
+    AssessRequest:
+      type: object
+      required: [exam_id, exam_type, language, code]
+      additionalProperties: false
+      properties:
+        sample_id: {$ref: '#/components/schemas/ClientSampleId'}
+        exam_id: {$ref: '#/components/schemas/ExamId'}
+        exam_type: {$ref: 'internal/blind-sample.schema.json#/$defs/ExamType'}
+        language: {const: cpp11}
+        code: {$ref: '#/components/schemas/SourceCode'}
+        compile_log: {$ref: '#/components/schemas/CompileLog'}
+        test_report:
+          type: [array, 'null']
+          maxItems: 64
+          items: {$ref: 'internal/blind-sample.schema.json#/$defs/ReportedCase'}
+        options: {$ref: '#/components/schemas/RequestOptions'}
+        feedback_target:
+          type: object
+          description: Read by T3 only. The T1/T2 part never sees it.
+          required: [target_feedback_level]
+          additionalProperties: false
+          properties:
+            target_feedback_level: {$ref: 'internal/cond-sample.schema.json#/$defs/Level'}
+            taxonomy_error:
+              type: array
+              uniqueItems: true
+              maxItems: 10
+              items: {$ref: 'internal/cond-sample.schema.json#/$defs/TaxonomyLabel'}
+      not:
+        anyOf:
+          - required: [feedback]
+          - required: [target_feedback_level]
+          - required: [level]
+          - required: [taxonomy_error]
+          - required: [labels]
+      allOf:
+        - $ref: '#/components/schemas/CompileLogRequiredWithoutSandbox'
+    EvidenceSummary:
+      type: object
+      description: Projection of the evidence card for reviewers; counts and flags only, never code or log text.
+      required: [code_sha, toolchain_id, evidence_mode, missing_code, tests_source, compile, tests, static, policy]
+      additionalProperties: false
+      properties:
+        code_sha: {type: string, pattern: '^[0-9a-f]{40}$'}
+        toolchain_id:
+          type: string
+          pattern: '^[0-9a-f]{12}$'
+          description: '"000000000000" (sentinel) when evidence_mode = given_signals_only; see evidence-card NoToolchainId.'
+        evidence_mode: {enum: [full, given_signals_only]}
+        missing_code: {type: boolean}
+        tests_source:
+          enum: [given_report, public_tests, none]
+          description: Origin of the tests summarised in `tests` (evidence card tests_source). Always public_tests or none on /v1/feedback.
+        compile:
+          type: object
+          description: log_* are null when the client sent no compile_log (card compile_given = null).
+          required: [log_has_error, log_has_link_error, log_build_failed, log_truncated, rebuild_build_failed, rebuild_agrees]
+          additionalProperties: false
+          properties:
+            log_has_error: {type: ['boolean', 'null']}
+            log_has_link_error: {type: ['boolean', 'null']}
+            log_build_failed: {type: ['boolean', 'null']}
+            log_truncated: {type: ['boolean', 'null']}
+            rebuild_build_failed: {type: ['boolean', 'null']}
+            rebuild_agrees: {type: ['boolean', 'null']}
+        tests:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [n_tests, strict_rate, lenient_rate, io_gap, n_by_fail_class, crash_suspected_ub, nondeterministic, n_prompt_prefix, n_whitespace_issue]
+              additionalProperties: false
+              properties:
+                n_tests: {type: integer, minimum: 0}
+                strict_rate: {type: number, minimum: 0, maximum: 1}
+                lenient_rate: {type: number, minimum: 0, maximum: 1}
+                io_gap: {type: number, minimum: 0, maximum: 1}
+                n_by_fail_class:
+                  type: object
+                  propertyNames: {$ref: 'internal/evidence-card.schema.json#/$defs/FailClass'}
+                  additionalProperties: {type: integer, minimum: 0}
+                crash_suspected_ub: {type: boolean}
+                nondeterministic: {type: boolean}
+                n_prompt_prefix: {type: integer, minimum: 0}
+                n_whitespace_issue: {type: integer, minimum: 0}
+        static:
+          type: object
+          required: [effective_code_lines, all_commented, has_main, functions_missing, functions_stub, disallowed_includes, forbidden_calls, hardcode_suspected]
+          additionalProperties: false
+          properties:
+            effective_code_lines: {type: integer, minimum: 0}
+            all_commented: {type: boolean}
+            has_main: {type: boolean}
+            functions_missing: {type: array, items: {type: string, pattern: '^P[0-9]+$'}}
+            functions_stub: {type: array, items: {type: string, pattern: '^P[0-9]+$'}}
+            disallowed_includes: {type: array, items: {type: string}}
+            forbidden_calls: {type: array, items: {type: string}}
+            hardcode_suspected: {type: boolean}
+        policy:
+          oneOf:
+            - type: 'null'
+            - $ref: 'internal/evidence-card.schema.json#/$defs/PolicyFeatures'
+    ReviewReasonCode:
+      description: 'Deep-review triggers. The first 14 codes cover BA §9.3 rows 1-12; the last five come from 03 (missing code, degraded sandbox, POL fallback, L4 not verified, LLM parse fallback).'
+      enum:
+        - new_exam
+        - link_error
+        - zero_effective_code
+        - compile_signal_disagreement
+        - compile_log_truncated
+        - prerequisite_suspected_failed
+        - io_anomaly
+        - crash_or_timeout
+        - t1_high_uncertainty
+        - t1_t2_inconsistent
+        - near_pass_threshold
+        - injection_suspected
+        - t3_template_fallback
+        - blind_audit_sample
+        - missing_code
+        - sandbox_degraded
+        - policy_extraction_failed
+        - l4_unverified
+        - model_fallback
+    ReviewReason:
+      type: object
+      required: [code, source]
+      additionalProperties: false
+      properties:
+        code: {$ref: '#/components/schemas/ReviewReasonCode'}
+        source: {type: string, description: "Rule origin, e.g. 'BA §9.3 #5' or '03 §3.2'."}
+        detail: {type: string, maxLength: 300, description: 'Observed facts only (counts, flags); never code, logs or feedback text.'}
+    Review:
+      type: object
+      required: [needs_review, route, blind_audit, reasons]
+      additionalProperties: false
+      properties:
+        needs_review: {type: boolean, description: true iff route = deep.}
+        route: {enum: [fast, deep]}
+        blind_audit: {type: boolean, description: 'BA §9.3 #12; client UI must hide AI scores.'}
+        reasons: {type: array, items: {$ref: '#/components/schemas/ReviewReason'}}
+    RunVersion:
+      type: object
+      required: [contract_version, service_run_id, model_id, model_revision, adapter_sha256, config_sha256, toolchain_id, sandbox_image_digest, cache]
+      additionalProperties: false
+      properties:
+        contract_version: {$ref: 'internal/run-manifest.schema.json#/$defs/SemVer'}
+        service_run_id: {$ref: 'internal/run-manifest.schema.json#/$defs/RunId'}
+        model_id: {type: string}
+        model_revision: {type: string, pattern: '^[0-9a-f]{40}$'}
+        adapter_sha256:
+          oneOf:
+            - type: 'null'
+            - {$ref: 'internal/run-manifest.schema.json#/$defs/Sha256'}
+          description: null for T1/T2 (no touched_feedback adapter allowed); A3 sha for T3, and for /v1/assess when t3 is not null (T1/T2 never load it).
+        config_sha256: {$ref: 'internal/run-manifest.schema.json#/$defs/Sha256'}
+        toolchain_id: {type: string, pattern: '^[0-9a-f]{12}$'}
+        sandbox_image_digest:
+          oneOf:
+            - type: 'null'
+            - {$ref: 'internal/run-manifest.schema.json#/$defs/ImageDigest'}
+        cache: {enum: [hit, miss, mixed]}
+    GradeResponse:
+      type: object
+      required: [request_id, result, policy_variant, evidence, review, versions]
+      additionalProperties: false
+      properties:
+        request_id: {type: string}
+        sample_id: {type: ['string', 'null']}
+        result: {$ref: 'internal/t1-output.schema.json#/$defs/T1Prediction'}
+        policy_variant: {enum: [gold_optimized, written_policy, hybrid]}
+        total_distribution:
+          type: array
+          minItems: 11
+          maxItems: 11
+          items: {type: number, minimum: 0, maximum: 1}
+          description: P(total = t) for t = 0..10 over valid vectors of the exam (03 §3.4 step 5).
+        evidence: {$ref: '#/components/schemas/EvidenceSummary'}
+        evidence_card: {$ref: 'internal/evidence-card.schema.json'}
+        review: {$ref: '#/components/schemas/Review'}
+        versions: {$ref: '#/components/schemas/RunVersion'}
+    ClassifyResponse:
+      type: object
+      required: [request_id, result, label_probabilities, t1_total_used, cross_constraint_applied, evidence, review, versions]
+      additionalProperties: false
+      properties:
+        request_id: {type: string}
+        sample_id: {type: ['string', 'null']}
+        result: {$ref: 'internal/t2-output.schema.json#/$defs/T2Prediction'}
+        label_probabilities:
+          type: object
+          propertyNames: {$ref: 'internal/t2-output.schema.json#/$defs/TaxonomyLabel'}
+          additionalProperties: {type: number, minimum: 0, maximum: 1}
+        t1_total_used: {type: integer, minimum: 0, maximum: 10}
+        cross_constraint_applied: {type: boolean, description: true when FR-T2-06 added a label.}
+        evidence: {$ref: '#/components/schemas/EvidenceSummary'}
+        evidence_card: {$ref: 'internal/evidence-card.schema.json'}
+        review: {$ref: '#/components/schemas/Review'}
+        versions: {$ref: '#/components/schemas/RunVersion'}
+    GuardSummary:
+      type: object
+      required: [passed, attempts, fallback, violations_last, underlevel, l4_unverified]
+      additionalProperties: false
+      properties:
+        passed: {const: true, description: 'Final text passed GRD at the requested level; a 200 never carries false (template or minimal safe text is used instead, FR-GRD-06).'}
+        attempts: {type: integer, minimum: 1, maximum: 4, description: Greedy attempt + up to t3.max_retries retries.}
+        fallback: {enum: [none, template, minimal_safe]}
+        violations_last:
+          type: array
+          description: Rules hit by the last rejected attempt (layer and rule only, no span text).
+          items:
+            type: object
+            required: [layer, rule]
+            additionalProperties: false
+            properties:
+              layer: {enum: [lexical, syntax, contextual, verbal, exec, style]}
+              rule: {type: string}
+        underlevel: {type: array, items: {type: string}, description: FR-GRD-07 report only.}
+        l4_unverified: {type: boolean}
+    FeedbackResponse:
+      type: object
+      required: [request_id, target_feedback_level, result, guard, evidence, review, versions]
+      additionalProperties: false
+      properties:
+        request_id: {type: string}
+        sample_id: {type: ['string', 'null']}
+        target_feedback_level: {$ref: 'internal/cond-sample.schema.json#/$defs/Level'}
+        result: {$ref: 'internal/t3-output.schema.json#/$defs/T3Prediction'}
+        guard: {$ref: '#/components/schemas/GuardSummary'}
+        evidence: {$ref: '#/components/schemas/EvidenceSummary'}
+        evidence_card: {$ref: 'internal/evidence-card.schema.json'}
+        review: {$ref: '#/components/schemas/Review'}
+        versions: {$ref: '#/components/schemas/RunVersion'}
+    AssessResponse:
+      type: object
+      required: [request_id, t1, t2, t3, labels_source, evidence, review, versions]
+      additionalProperties: false
+      properties:
+        request_id: {type: string}
+        sample_id: {type: ['string', 'null']}
+        t1: {$ref: 'internal/t1-output.schema.json#/$defs/T1Prediction'}
+        t2: {$ref: 'internal/t2-output.schema.json#/$defs/T2Prediction'}
+        t3:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [target_feedback_level, result, guard]
+              additionalProperties: false
+              properties:
+                target_feedback_level: {$ref: 'internal/cond-sample.schema.json#/$defs/Level'}
+                result: {$ref: 'internal/t3-output.schema.json#/$defs/T3Prediction'}
+                guard: {$ref: '#/components/schemas/GuardSummary'}
+                evidence:
+                  $ref: '#/components/schemas/EvidenceSummary'
+                  description: Summary of the T3 card; present only when it differs from the T1/T2 card (test_report sent for single_problem).
+        labels_source: {enum: [client, predicted, none]}
+        policy_variant: {enum: [gold_optimized, written_policy, hybrid]}
+        evidence: {$ref: '#/components/schemas/EvidenceSummary'}
+        review: {$ref: '#/components/schemas/Review'}
+        versions: {$ref: '#/components/schemas/RunVersion'}
+    EvidenceResponse:
+      type: object
+      required: [request_id, evidence_card, versions]
+      additionalProperties: false
+      properties:
+        request_id: {type: string}
+        sample_id: {type: ['string', 'null']}
+        evidence_card: {$ref: 'internal/evidence-card.schema.json'}
+        versions: {$ref: '#/components/schemas/RunVersion'}
+    InfoResponse:
+      type: object
+      required: [service, contract_version, service_run_id, model, adapters, config_sha256, toolchain, label_space_sha256, build, exams, limits, capabilities]
+      additionalProperties: false
+      properties:
+        service: {const: grader}
+        contract_version: {$ref: 'internal/run-manifest.schema.json#/$defs/SemVer'}
+        service_run_id: {$ref: 'internal/run-manifest.schema.json#/$defs/RunId'}
+        model:
+          type: object
+          required: [model_id, revision]
+          additionalProperties: false
+          properties:
+            model_id: {type: string}
+            revision: {type: string, pattern: '^[0-9a-f]{40}$'}
+        adapters:
+          type: array
+          items:
+            type: object
+            required: [name, sha256, tasks, touched_feedback]
+            additionalProperties: false
+            properties:
+              name: {type: string}
+              sha256: {$ref: 'internal/run-manifest.schema.json#/$defs/Sha256'}
+              tasks: {type: array, items: {enum: [t1, t2, t3]}, uniqueItems: true}
+              touched_feedback: {type: boolean}
+        config_sha256: {$ref: 'internal/run-manifest.schema.json#/$defs/Sha256'}
+        toolchain:
+          type: object
+          required: [toolchain_id, profile, sandbox_image_digest, app_image_digest]
+          additionalProperties: false
+          properties:
+            toolchain_id: {type: string, pattern: '^[0-9a-f]{12}$'}
+            profile: {type: string}
+            sandbox_image_digest:
+              oneOf:
+                - type: 'null'
+                - {$ref: 'internal/run-manifest.schema.json#/$defs/ImageDigest'}
+            app_image_digest:
+              oneOf:
+                - type: 'null'
+                - {$ref: 'internal/run-manifest.schema.json#/$defs/ImageDigest'}
+        label_space_sha256: {$ref: 'internal/run-manifest.schema.json#/$defs/Sha256'}
+        build:
+          type: object
+          required: [git_sha, tag, dirty]
+          additionalProperties: false
+          properties:
+            git_sha: {type: string, pattern: '^[0-9a-f]{40}$'}
+            tag: {type: ['string', 'null']}
+            dirty: {type: boolean}
+        exams:
+          type: array
+          items:
+            type: object
+            required: [exam_id, exam_type, problem_card_schema_version]
+            additionalProperties: false
+            properties:
+              exam_id: {$ref: '#/components/schemas/ExamId'}
+              exam_type: {$ref: 'internal/blind-sample.schema.json#/$defs/ExamType'}
+              problem_card_schema_version: {const: '1.0'}
+        limits:
+          type: object
+          required: [max_body_bytes, max_code_chars, max_compile_log_chars, max_test_cases, rate_limit_per_minute]
+          additionalProperties: false
+          properties:
+            max_body_bytes: {type: integer, minimum: 1}
+            max_code_chars: {type: integer, minimum: 1}
+            max_compile_log_chars: {type: integer, minimum: 1}
+            max_test_cases: {type: integer, minimum: 1}
+            rate_limit_per_minute: {type: integer, minimum: 1}
+        capabilities:
+          type: object
+          required: [sandbox, evidence_modes, policy_variants, levels_supported]
+          additionalProperties: false
+          properties:
+            sandbox: {type: boolean}
+            evidence_modes: {type: array, items: {enum: [full, given_signals_only]}}
+            policy_variants: {type: array, items: {enum: [gold_optimized, written_policy, hybrid]}}
+            levels_supported: {type: array, items: {$ref: 'internal/cond-sample.schema.json#/$defs/Level'}}
+    HealthResponse:
+      type: object
+      required: [status, contract_version, checks]
+      additionalProperties: false
+      properties:
+        status: {enum: [ok, degraded, starting, failed]}
+        contract_version: {$ref: 'internal/run-manifest.schema.json#/$defs/SemVer'}
+        checks:
+          type: object
+          additionalProperties: false
+          properties:
+            engine: {enum: [ok, failed, starting]}
+            sandbox: {enum: [ok, failed, disabled]}
+            cache: {enum: [ok, failed]}
+            label_space: {enum: [ok, failed]}
+    Problem:
+      type: object
+      description: RFC 9457 problem details. Extensions code, exit_code, request_id, errors. Values from the request are reported as type, length and sha1 only (FR-SEC-05 style), never verbatim. Same shape as the `error` field of the CLI RunResult line (internal/run-result.schema.json $defs/Problem; parity test in 06 §6.2).
+      required: [type, title, status]
+      additionalProperties: true
+      properties:
+        type:
+          type: string
+          format: uri
+          description: https://grader.invalid/problems/<slug>; slugs listed in 06 §4.
+        title: {type: string}
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+          description: HTTP status; for CLI-only errors the HTTP equivalent listed in 06 §4 (QuotaExceeded -> 429).
+        detail: {type: string}
+        instance: {type: string, format: uri-reference}
+        code:
+          description: Exception class of 03 §6.2, or a transport-level code.
+          enum:
+            - MalformedRequest
+            - Unauthorized
+            - PayloadTooLarge
+            - UnsupportedMediaType
+            - IdempotencyConflict
+            - RateLimited
+            - RequestTimeout
+            - ServiceBusy
+            - ConfigError
+            - DataSchemaError
+            - DataIntegrityError
+            - SubmissionFormatError
+            - FirewallViolation
+            - EgressBlocked
+            - TestIsolationError
+            - UpstreamError
+            - SandboxError
+            - CacheMissError
+            - QuotaExceeded
+            - CostCapExceeded
+            - InternalError
+        exit_code: {type: integer, minimum: 0, maximum: 6, description: Equivalent CLI exit code (03 §4).}
+        request_id: {type: string}
+        errors:
+          type: array
+          items:
+            type: object
+            required: [pointer, rule]
+            additionalProperties: false
+            properties:
+              pointer: {type: string, description: JSON Pointer into the request body.}
+              rule: {type: string}
+              observed: {type: string, description: 'type=..., length=..., sha1=... only.'}

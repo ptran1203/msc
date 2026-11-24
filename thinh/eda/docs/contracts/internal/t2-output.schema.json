@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/internal/t2-output.schema.json",
+  "title": "T2Output (and T2Prediction in $defs)",
+  "description": "Root = 03 §2.1 T2Output {taxonomy_error}. $defs/T2Prediction = 03 §2.5 T2Prediction: subset of the label space, NFC, no duplicate, sorted in LS order (BR-12, BR-13, FR-T2-01). LS order and NFC normalisation are enforced by LabelVocab.match and the validator; the enum already rejects NFD bytes.",
+  "x-contract-version": "0.1.0",
+  "x-status": "internal",
+  "x-pydantic": ["grader.ing.schemas:T2Output", "grader.t2.pipeline:T2Prediction"],
+  "type": "object",
+  "required": ["taxonomy_error"],
+  "additionalProperties": false,
+  "properties": {
+    "taxonomy_error": { "$ref": "#/$defs/LabelList" }
+  },
+  "$defs": {
+    "TaxonomyLabel": {
+      "enum": [
+        "Lỗi biên dịch",
+        "Lỗi nhập/xuất",
+        "Lỗi logic",
+        "Lỗi vòng lặp",
+        "Lỗi mảng/chuỗi",
+        "Lỗi hàm",
+        "Lỗi edge case",
+        "Lỗi thuật toán",
+        "Lỗi hard-code",
+        "Lỗi style"
+      ]
+    },
+    "LabelList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/TaxonomyLabel" },
+      "uniqueItems": true,
+      "maxItems": 10
+    },
+    "T2Prediction": {
+      "type": "object",
+      "required": ["taxonomy_error"],
+      "additionalProperties": false,
+      "x-invariants": ["labels sorted in label-space order (FR-T2-01)", "if t2.require_label_if_total_lt_10 and T1 total < 10 then len >= 1 (FR-T2-06, BR-14)"],
+      "properties": {
+        "taxonomy_error": { "$ref": "#/$defs/LabelList" }
+      }
+    }
+  }
+}

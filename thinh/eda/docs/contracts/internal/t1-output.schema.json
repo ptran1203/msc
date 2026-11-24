@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/internal/t1-output.schema.json",
+  "title": "T1Output (and T1Prediction in $defs)",
+  "description": "Root = 03 §2.1 T1Output {rubric, total_score} with strict ints in the domains of BR-02. $defs/T1Prediction = 03 §2.5 T1Prediction: same fields plus internal gate_source, and a model_validator enforcing total_score == sum(rubric) (BR-01, FR-T1-01) that JSON Schema cannot express. gate_source goes to OOF/log and REST responses only; val/writer.py strips it before writing a predictions file.",
+  "x-contract-version": "0.1.0",
+  "x-status": "internal",
+  "x-pydantic": ["grader.ing.schemas:T1Output", "grader.t1.pipeline:T1Prediction"],
+  "type": "object",
+  "required": ["rubric", "total_score"],
+  "additionalProperties": false,
+  "properties": {
+    "rubric": { "$ref": "#/$defs/Rubric" },
+    "total_score": { "type": "integer", "minimum": 0, "maximum": 10 }
+  },
+  "$defs": {
+    "Rubric": {
+      "type": "object",
+      "required": ["compilable", "io_format", "logic", "edge_case", "complexity", "code_quality"],
+      "additionalProperties": false,
+      "properties": {
+        "compilable": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "io_format": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "logic": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "edge_case": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "complexity": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "code_quality": { "type": "integer", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "GateSource": {
+      "enum": ["exam", "exam_type_default", "none"],
+      "description": "Origin of the compile-error gate vector (FR-T1-03, Q-26)."
+    },
+    "T1Prediction": {
+      "type": "object",
+      "required": ["rubric", "total_score"],
+      "additionalProperties": false,
+      "x-invariants": ["total_score == compilable + io_format + logic + edge_case + complexity + code_quality (BR-01)"],
+      "properties": {
+        "rubric": { "$ref": "#/$defs/Rubric" },
+        "total_score": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "gate_source": { "$ref": "#/$defs/GateSource" }
+      }
+    }
+  }
+}

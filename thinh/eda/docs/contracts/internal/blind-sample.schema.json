@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/internal/blind-sample.schema.json",
+  "title": "BlindSample - T1/T2 view behind the feedback firewall",
+  "description": "Mirrors 03 §2.2 BlindSample (frozen, extra=\"forbid\"). Built only by BlindSample.from_record, which copies whitelisted fields and never uses **rec. It must never carry feedback, the target level, taxonomy labels, gold output or the T3 view (BR-21, FR-ING-05, FR-SEC-01). The schema-level firewall is additionalProperties=false plus an explicit not/anyOf list so that a violation names the forbidden key.",
+  "x-contract-version": "0.1.0",
+  "x-status": "internal",
+  "x-pydantic": "grader.ing.views:BlindSample",
+  "type": "object",
+  "required": ["sample_id", "exam_id", "exam_type", "code", "compile_log", "test_report"],
+  "additionalProperties": false,
+  "properties": {
+    "sample_id": { "type": "string", "minLength": 1 },
+    "exam_id": { "type": "string", "minLength": 1 },
+    "exam_type": { "$ref": "#/$defs/ExamType" },
+    "code": { "$ref": "#/$defs/CodeText" },
+    "compile_log": { "type": "string", "description": "Original organiser log, may be \"\" (03 §2.1)." },
+    "test_report": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/ReportedCase" },
+      "description": "Tuple in pydantic; null for multi_problem."
+    }
+  },
+  "not": {
+    "anyOf": [
+      { "required": ["feedback"] },
+      { "required": ["target_feedback_level"] },
+      { "required": ["level"] },
+      { "required": ["taxonomy_error"] },
+      { "required": ["labels"] },
+      { "required": ["t1_test_report"] },
+      { "required": ["output"] }
+    ]
+  },
+  "$defs": {
+    "ExamType": { "enum": ["multi_problem", "single_problem"] },
+    "Sha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "CodeText": {
+      "type": "object",
+      "description": "03 §2.2 CodeText. text is NFC with the BOM removed; raw_sha1 = sha1 of the original bytes, BOM included (FR-ING-02). Missing code in predict mode: text = \"\" and raw_sha1 = sha1 of empty bytes (FR-ING-03).",
+      "required": ["text", "raw_sha1", "encoding", "had_bom", "n_lines"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string" },
+        "raw_sha1": { "$ref": "#/$defs/Sha1" },
+        "encoding": { "type": "string", "minLength": 1, "examples": ["utf-8", "cp1258", "latin-1"] },
+        "had_bom": { "type": "boolean" },
+        "n_lines": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "ReportedCase": {
+      "type": "object",
+      "description": "03 §2.1 ReportedCase. actual is whitespace-stripped (BR-11); \"<TIMEOUT>\" = timeout; \"\" = suspected crash.",
+      "required": ["input", "expected", "actual", "passed"],
+      "additionalProperties": false,
+      "properties": {
+        "input": { "type": "string" },
+        "expected": { "type": "string" },
+        "actual": { "type": "string" },
+        "passed": { "type": "boolean" }
+      }
+    }
+  }
+}

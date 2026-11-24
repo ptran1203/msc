@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EDA đầu vào và rubric</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f3f2ee;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #77756f;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10);
+  --ex01: #2a78d6; --ex02: #eb6834;
+  --neutral: #f0efec; --neutral-ink: #77756f;
+  --s1: #86b6ef; --s2: #5598e7; --s3: #2a78d6; --s4: #184f95;
+  --s1-ink: #0b0b0b; --s2-ink: #0b0b0b; --s3-ink: #ffffff; --s4-ink: #ffffff;
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --good-ink: #ffffff; --warning-ink: #0b0b0b; --serious-ink: #0b0b0b; --critical-ink: #ffffff;
+  --tip-bg: #0b0b0b; --tip-ink: #ffffff; --tip-ink-2: #c3c2b7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #9a988f;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+    --ex01: #3987e5; --ex02: #d95926;
+    --neutral: #2c2c2a; --neutral-ink: #9a988f;
+    --s1: #184f95; --s2: #2a78d6; --s3: #5598e7; --s4: #86b6ef;
+    --s1-ink: #ffffff; --s2-ink: #ffffff; --s3-ink: #0b0b0b; --s4-ink: #0b0b0b;
+    --tip-bg: #f3f2ee; --tip-ink: #0b0b0b; --tip-ink-2: #52514e;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
+  --ink: #ffffff; --ink-2: #c3c2b7; --muted: #9a988f;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+  --ex01: #3987e5; --ex02: #d95926;
+  --neutral: #2c2c2a; --neutral-ink: #9a988f;
+  --s1: #184f95; --s2: #2a78d6; --s3: #5598e7; --s4: #86b6ef;
+  --s1-ink: #ffffff; --s2-ink: #ffffff; --s3-ink: #0b0b0b; --s4-ink: #0b0b0b;
+  --tip-bg: #f3f2ee; --tip-ink: #0b0b0b; --tip-ink-2: #52514e;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main, .page-head, footer { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+.page-head { padding-top: 28px; padding-bottom: 8px; display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; font-weight: 650; }
+h2 { font-size: 20px; margin: 36px 0 4px; font-weight: 650; }
+h3 { font-size: 15px; margin: 0; font-weight: 600; }
+.sub { color: var(--ink-2); margin: 0; max-width: 72ch; }
+.lead { color: var(--ink-2); margin: 0 0 14px; max-width: 80ch; }
+.theme { display: inline-flex; border: 1px solid var(--ring); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.theme button { border: 0; background: transparent; color: var(--ink-2); padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.theme button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); font-weight: 600; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 16px; }
+.tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 12px 14px; }
+.tile .label { color: var(--ink-2); font-size: 13px; }
+.tile .value { font-size: 28px; font-weight: 600; line-height: 1.2; margin-top: 2px; }
+.tile .note { color: var(--muted); font-size: 12.5px; }
+figure { margin: 14px 0; background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px 12px; min-width: 0; }
+figure > header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+figure .desc { color: var(--ink-2); font-size: 13.5px; margin: 2px 0 10px; max-width: 78ch; }
+figcaption { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
+.toggle { border: 1px solid var(--ring); background: var(--surface); color: var(--ink-2); border-radius: 6px; font: inherit; font-size: 12.5px; padding: 3px 8px; cursor: pointer; white-space: nowrap; }
+.scroll { overflow-x: auto; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid2 > figure { margin: 0; }
+@media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--ink-2); margin: 0 0 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.key { display: inline-grid; place-items: center; width: 18px; height: 14px; border-radius: 3px; font-size: 10px; font-weight: 700; }
+.key.dot { width: 10px; height: 10px; border-radius: 50%; }
+.key.ring { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--ex02); background: var(--surface); }
+table.data { border-collapse: collapse; font-size: 12.5px; width: 100%; font-variant-numeric: tabular-nums; }
+table.data th, table.data td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--grid); }
+table.data th { color: var(--ink-2); font-weight: 600; }
+.tabwrap { overflow-x: auto; margin-top: 8px; }
+.hidden { display: none; }
+svg text { fill: var(--ink-2); font-size: 11.5px; }
+svg .t-ink { fill: var(--ink); }
+svg .t-muted { fill: var(--muted); }
+svg .gridline { stroke: var(--grid); stroke-width: 1; }
+svg .axisline { stroke: var(--axis); stroke-width: 1; }
+svg .mark { cursor: default; outline: none; }
+svg .mark:focus-visible .hit, svg .mark:hover .hit { stroke: var(--ink); stroke-width: 1.5; }
+.f-ex01 { fill: var(--ex01); } .f-ex02 { fill: var(--ex02); }
+.st-ex01 { stroke: var(--ex01); } .st-ex02 { stroke: var(--ex02); }
+.f-surface { fill: var(--surface); } .f-neutral { fill: var(--neutral); }
+.f-s1 { fill: var(--s1); } .f-s2 { fill: var(--s2); } .f-s3 { fill: var(--s3); } .f-s4 { fill: var(--s4); }
+.i-s1 { fill: var(--s1-ink) !important; } .i-s2 { fill: var(--s2-ink) !important; } .i-s3 { fill: var(--s3-ink) !important; } .i-s4 { fill: var(--s4-ink) !important; }
+.i-neutral { fill: var(--neutral-ink) !important; }
+.f-good { fill: var(--good); } .f-warning { fill: var(--warning); } .f-serious { fill: var(--serious); } .f-critical { fill: var(--critical); }
+.i-good { fill: var(--good-ink) !important; } .i-warning { fill: var(--warning-ink) !important; } .i-serious { fill: var(--serious-ink) !important; } .i-critical { fill: var(--critical-ink) !important; }
+.bg-ex01 { background: var(--ex01); } .bg-ex02 { background: var(--ex02); }
+.bg-good { background: var(--good); color: var(--good-ink); } .bg-warning { background: var(--warning); color: var(--warning-ink); }
+.bg-serious { background: var(--serious); color: var(--serious-ink); } .bg-critical { background: var(--critical); color: var(--critical-ink); }
+.bg-s1 { background: var(--s1); } .bg-s2 { background: var(--s2); } .bg-s3 { background: var(--s3); color: var(--s3-ink); } .bg-s4 { background: var(--s4); color: var(--s4-ink); }
+.bg-neutral { background: var(--neutral); color: var(--neutral-ink); }
+.checks { display: grid; gap: 8px; }
+.check { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
+.check .scope { color: var(--muted); font-size: 12px; }
+.meter { height: 6px; background: var(--neutral); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+.meter > i { display: block; height: 100%; border-radius: 3px; background: var(--s3); }
+.badge { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 12px; font-weight: 700; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; }
+.card h4 { margin: 0 0 4px; font-size: 14px; }
+.card p { margin: 0; color: var(--ink-2); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
+footer { color: var(--muted); font-size: 12.5px; padding-top: 24px; padding-bottom: 40px; }
+#tip { position: fixed; z-index: 10; pointer-events: none; background: var(--tip-bg); color: var(--tip-ink); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; max-width: 320px; box-shadow: 0 4px 18px rgba(0,0,0,.18); display: none; }
+#tip .row { display: flex; gap: 8px; align-items: baseline; }
+#tip strong { font-weight: 650; }
+#tip .lab { color: var(--tip-ink-2); }
+#tip .head { font-weight: 650; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header class="page-head">
+  <div>
+    <h1>EDA đầu vào và rubric 6 chiều</h1>
+    <p class="sub" id="subtitle"></p>
+  </div>
+  <div class="theme" role="group" aria-label="Giao diện">
+    <button type="button" data-theme-set="auto">Tự động</button>
+    <button type="button" data-theme-set="light">Sáng</button>
+    <button type="button" data-theme-set="dark">Tối</button>
+  </div>
+</header>
+<main>
+  <section class="kpis" id="kpis" aria-label="Chỉ số chính"></section>
+
+  <h2>1. Đầu vào</h2>
+  <p class="lead">Mỗi bài có mã nguồn C++, đề bài (tra theo <code>exam_id</code>) và tín hiệu phụ do BTC sinh: <code>compile_log</code> cho cả hai đề, <code>test_report</code> chỉ cho EX02. Phần này cho thấy các tín hiệu đó trông thế nào và chỗ nào chúng lệch với nhãn.</p>
+  <figure id="fig-inputs"></figure>
+  <div class="grid2">
+    <figure id="fig-code"></figure>
+    <figure id="fig-log"></figure>
+  </div>
+  <figure id="fig-ex01fn"></figure>
+  <figure id="fig-tests"></figure>
+  <figure id="fig-corr"></figure>
+
+  <h2>2. Rubric 6 chiều</h2>
+  <p class="lead">compilable 0–1, io_format 0–1, logic 0–4, edge_case 0–2, complexity 0–1, code_quality 0–1; tổng 0–10. Trên mẫu, nhiều chiều phụ thuộc nhau và quy ước khác nhau giữa hai đề.</p>
+  <figure id="fig-heat"></figure>
+  <figure id="fig-dims"></figure>
+  <div class="grid2">
+    <figure id="fig-total"></figure>
+    <figure id="fig-checks"></figure>
+  </div>
+  <figure id="fig-policy"></figure>
+
+  <h2>3. Hệ quả cho thiết kế pipeline</h2>
+  <div class="cards" id="cards"></div>
+</main>
+<footer id="foot"></footer>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const SVGNS = "http://www.w3.org/2000/svg";
+const DIM_SHORT = { compilable: "comp", io_format: "io", logic: "logic", edge_case: "edge", complexity: "cplx", code_quality: "qual" };
+const VERDICT = {
+  pass: { glyph: "✓", cls: "good", label: "Đạt" },
+  prompt: { glyph: "P", cls: "warning", label: "Chỉ sai vì in thêm dòng nhắc nhập" },
+  prompt_wrong: { glyph: "P✕", cls: "serious", label: "In dòng nhắc và sai đáp án" },
+  wrong: { glyph: "✕", cls: "serious", label: "Sai đáp án" },
+  crash: { glyph: "∅", cls: "critical", label: "Output rỗng (chương trình chết, UB)" },
+  timeout: { glyph: "⏱", cls: "critical", label: "Quá thời gian" },
+};
+const COMPILE = {
+  ok: { glyph: "✓", cls: "good", label: "Log rỗng" },
+  warning: { glyph: "!", cls: "warning", label: "Chỉ có cảnh báo" },
+  fail: { glyph: "✕", cls: "critical", label: "Lỗi build (biên dịch hoặc link)" },
+};
+const PSTATUS = {
+  ok: ["✓", "Đúng"], wrong: ["✕", "Sai"], none: ["–", "Không làm"], gated: ["⊘", "Không chấm (sau P1 sai)"],
+  loop: ["∞", "Lặp vô hạn"], ce: ["CE", "Lỗi biên dịch"], unk: ["?", "Không rõ"],
+};
+
+/* ---------- small DOM helpers (all labels go through textContent) ---------- */
+function s(tag, attrs, parent) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "text") n.textContent = v; else if (k === "cls") n.setAttribute("class", v); else n.setAttribute(k, v);
+  }
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function h(tag, attrs, children) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "text") n.textContent = v; else if (k === "cls") n.className = v; else n.setAttribute(k, v);
+  }
+  for (const c of [].concat(children || [])) if (c != null) n.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+  return n;
+}
+const short = id => id.split("-")[1];
+const byExam = ex => DATA.samples.filter(x => x.exam === ex);
+const sortByTotal = arr => arr.slice().sort((a, b) => b.total - a.total || a.id.localeCompare(b.id));
+const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
+
+/* ---------- tooltip: enhances, never gates (every value is also in the table view) ---------- */
+const tip = document.getElementById("tip");
+function showTip(x, y, head, rows) {
+  tip.replaceChildren();
+  if (head) tip.appendChild(h("div", { cls: "head", text: head }));
+  for (const [value, label] of rows) tip.appendChild(h("div", { cls: "row" }, [h("strong", { text: String(value) }), h("span", { cls: "lab", text: label })]));
+  tip.style.display = "block";
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.min(window.innerWidth - r.width - 8, x + 14) + "px";
+  tip.style.top = Math.max(8, Math.min(window.innerHeight - r.height - 8, y + 14)) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+function bindTip(node, head, rows) {
+  node.setAttribute("tabindex", "0");
+  node.setAttribute("class", (node.getAttribute("class") || "") + " mark");
+  node.setAttribute("aria-label", [head, ...rows.map(r => `${r[1]}: ${r[0]}`)].join("; "));
+  node.addEventListener("pointermove", e => showTip(e.clientX, e.clientY, head, rows));
+  node.addEventListener("pointerleave", hideTip);
+  node.addEventListener("focus", () => { const b = node.getBoundingClientRect(); showTip(b.right, b.top, head, rows); });
+  node.addEventListener("blur", hideTip);
+}
+
+/* ---------- figure shell with table-view toggle ---------- */
+function shell(id, title, desc, caption, noTable) {
+  const fig = document.getElementById(id);
+  const btn = noTable ? null : h("button", { type: "button", cls: "toggle", "aria-expanded": "false", text: "Xem bảng" });
+  fig.appendChild(h("header", {}, [h("div", {}, [h("h3", { text: title }), desc ? h("p", { cls: "desc", text: desc }) : null]), btn]));
+  const body = h("div", { cls: "scroll" });
+  const tab = h("div", { cls: "tabwrap hidden" });
+  fig.append(body, tab);
+  if (caption) fig.appendChild(h("figcaption", { text: caption }));
+  if (btn) btn.addEventListener("click", () => {
+    const open = tab.classList.toggle("hidden") === false;
+    btn.setAttribute("aria-expanded", String(open));
+    btn.textContent = open ? "Ẩn bảng" : "Xem bảng";
+  });
+  return { fig, body, tab };
+}
+function table(container, head, rows) {
+  const t = h("table", { cls: "data" });
+  t.appendChild(h("thead", {}, h("tr", {}, head.map(c => h("th", { text: c })))));
+  const tb = h("tbody");
+  for (const r of rows) tb.appendChild(h("tr", {}, r.map(c => h("td", { text: c == null ? "" : String(c) }))));
+  t.appendChild(tb);
+  container.appendChild(t);
+}
+function legend(items) {
+  return h("div", { cls: "legend" }, items.map(([key, label]) => h("span", {}, [key, label])));
+}
+const swatch = (cls, glyph, extra) => h("span", { cls: "key " + cls + (extra ? " " + extra : ""), text: glyph || "" });
+
+/* ---------- header + KPI tiles ---------- */
+function header() {
+  const ex1 = byExam("EX01").length, ex2 = byExam("EX02").length;
+  document.getElementById("subtitle").textContent =
+    `${DATA.n} bài mẫu (EX01 multi_problem ${ex1} bài, EX02 single_problem ${ex2} bài). Mọi số trên trang được tính lại từ dữ liệu bằng viz/build_input_rubric_viz.py; không trích code hay feedback của sinh viên.`;
+  const tests = DATA.samples.flatMap(x => x.tests || []);
+  const strict = tests.filter(t => t.verdict === "pass").length;
+  const ce = DATA.samples.filter(x => x.dims.compilable === 0).length;
+  const p50 = ex => { const v = byExam(ex).map(x => x.prompt_tokens).sort((a, b) => a - b); return v[Math.floor((v.length - 1) / 2)]; };
+  const sumOk = DATA.checks[0];
+  const tiles = [
+    ["Bài mẫu", DATA.n, `EX01 ${ex1} · EX02 ${ex2}`],
+    ["Không biên dịch được", ce, `${pct(ce, DATA.n)}% · cả hai đề`],
+    ["Test công khai đạt (so khớp chính xác)", `${strict}/${tests.length}`, `${DATA.ex02_corr.n} bài EX02 có test_report thật`],
+    ["Tổng = Σ 6 chiều", `${sumOk.holds}/${sumOk.n}`, "Không có điểm từng câu trong nhãn"],
+    ["Prompt ước tính (trung vị)", `${p50("EX01").toLocaleString("vi-VN")} / ${p50("EX02")}`, "token EX01 / EX02, ký tự ÷ 3.5"],
+  ];
+  const box = document.getElementById("kpis");
+  for (const [label, value, note] of tiles) box.appendChild(h("div", { cls: "tile" }, [h("div", { cls: "label", text: label }), h("div", { cls: "value", text: String(value) }), h("div", { cls: "note", text: note })]));
+}
+
+/* ---------- 1a. what each task receives ---------- */
+function figInputs() {
+  const { body, tab } = shell("fig-inputs", "Mỗi task nhận những trường nào",
+    "Đối chiếu input_fields của 3 file task. T3 có nhãn lỗi gold và level nhưng không có test_report; T1 và T2 tuyệt đối không được nhận feedback.", null, true);
+  const head = ["Trường", "T1 chấm rubric", "T2 phân loại lỗi", "T3 phản hồi", "Ghi chú"];
+  const rows = [
+    ["Đề bài (exams.json → statement)", "✓", "✓", "✓", "Tra theo exam_id"],
+    ["Mã nguồn (code_file)", "✓", "✓", "✓", "EX01 không có main theo quy định, nhưng 10/15 bài vẫn còn"],
+    ["compile_log", "✓", "✓", "✓", "BTC sinh lại bằng GNU g++; cắt ở 2000 ký tự"],
+    ["test_report", "✓ (EX02)", "✓ (EX02)", "—", "EX01: null; EX02: 8 test công khai, [] khi không build được"],
+    ["taxonomy_error (gold)", "—", "— (là output)", "✓", "Trùng 100% output T2"],
+    ["target_feedback_level", "—", "—", "✓", "4 chuỗi 'Level k - …'"],
+    ["feedback", "cấm", "cấm", "— (là output)", "Chỉ là nhãn của T3"],
+  ];
+  const t = h("table", { cls: "data" });
+  t.appendChild(h("thead", {}, h("tr", {}, head.map(c => h("th", { text: c })))));
+  const tb = h("tbody");
+  for (const r of rows) tb.appendChild(h("tr", {}, r.map(c => h("td", { text: c }))));
+  t.appendChild(tb);
+  body.appendChild(t);
+}
+
+/* ---------- 1b. code size strip plot ---------- */
+function figCode() {
+  const { body, tab } = shell("fig-code", "Độ dài mã nguồn (dòng code hiệu dụng)",
+    "Đã bỏ comment và dòng trống. Chấm đặc: biên dịch được; chấm rỗng: không biên dịch được (theo nhãn compilable).",
+    "S214 nằm ở 0 dòng vì cả file bị comment, nhưng nhãn vẫn compilable = 1 và tổng 10/10.");
+  const W = 520, L = 56, R = 16, rowH = 54, top = 8, H = top + rowH * 2 + 30;
+  const max = Math.max(...DATA.samples.map(x => x.eff_lines));
+  const xmax = Math.ceil(max / 50) * 50;
+  const X = v => L + ((W - L - R) * v) / xmax;
+  const svg = s("svg", { width: "100%", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Phân bố số dòng code hiệu dụng theo đề" }, body);
+  for (let v = 0; v <= xmax; v += 50) {
+    s("line", { x1: X(v), x2: X(v), y1: top, y2: top + rowH * 2, cls: "gridline" }, svg);
+    s("text", { x: X(v), y: top + rowH * 2 + 16, "text-anchor": "middle", text: v }, svg);
+  }
+  ["EX01", "EX02"].forEach((ex, r) => {
+    const cy = top + rowH * r + rowH / 2;
+    s("text", { x: 0, y: cy + 4, cls: "t-ink", text: ex }, svg);
+    byExam(ex).forEach((x, i) => {
+      const y = cy + ((i % 5) - 2) * 6;
+      const g = s("g", {}, svg);
+      s("circle", { cx: X(x.eff_lines), cy: y, r: 12, fill: "transparent", cls: "hit", "stroke-width": 0 }, g);
+      const filled = x.dims.compilable === 1;
+      s("circle", { cx: X(x.eff_lines), cy: y, r: 5, cls: filled ? `f-${ex.toLowerCase()}` : `f-surface st-${ex.toLowerCase()}`, "stroke-width": filled ? 2 : 2, stroke: filled ? "var(--surface)" : null }, g);
+      bindTip(g, x.id, [[x.eff_lines, "dòng code hiệu dụng"], [x.code_lines, "dòng trong file"], [COMPILE[x.compile === "link" || x.compile === "error" ? "fail" : x.compile].label, "compile_log"], [x.total, "tổng điểm gold"]]);
+    });
+  });
+  const s214 = DATA.samples.find(x => x.commented_out);
+  if (s214) s("text", { x: X(0) + 8, y: top + rowH + rowH / 2 + 23, cls: "t-ink", text: `${short(s214.id)} (0 dòng, gold ${s214.total}/10)` }, svg);
+  s("text", { x: W - R, y: H - 2, "text-anchor": "end", cls: "t-muted", text: "dòng" }, svg);
+  table(tab, ["Bài", "Đề", "Dòng hiệu dụng", "Dòng trong file", "compilable", "gcc lỗi", "Tổng"], DATA.samples.map(x => [x.id, x.exam, x.eff_lines, x.code_lines, x.dims.compilable, x.gcc_fail == null ? "" : (x.gcc_fail ? "có" : "không"), x.total]));
+  confusionBlock(body.parentNode, DATA.compile_confusion, "Lỗi biên dịch: tín hiệu so với nhãn compilable",
+    "Dương tính = không biên dịch được. TP: lỗi thật (nhãn cũng là 0). FP: lỗi \"giả\" so với nhãn (build lỗi nhưng nhãn vẫn compilable = 1). FN: build được nhưng nhãn ghi 0. EX01 dùng -fsyntax-only như log gốc; EX02 build và link. Chỉ biên dịch, không chạy code.",
+    ["báo lỗi", "build được", "nhãn: lỗi (0)", "nhãn: được (1)"], DATA.compile_confusion_original, "compilable");
+}
+
+/* Compile-failure detectors vs label: positive = "không biên dịch được" (compilable = 0). */
+function confusionBlock(fig, data, title, desc, labels, orig, dim) {
+  const [pPos, pNeg, yPos, yNeg] = labels;
+  const wrap = h("div", { style: "margin-top:12px; border-top:1px solid var(--grid); padding-top:10px" });
+  wrap.appendChild(h("h3", { text: title }));
+  wrap.appendChild(h("p", { cls: "desc", text: desc }));
+  const fixes = Object.entries(DATA.label_fixes || {}).filter(([, f]) => dim in f);
+  if (fixes.length) wrap.appendChild(h("p", { cls: "desc", text: `Nhãn đã gán lại (lỗi dataset, theo phản hồi của giảng viên): ${fixes.map(([id, f]) => `${short(id)} ${dim} → ${f[dim]}`).join("; ")}. Dòng "gốc" là kết quả với nhãn phát hành.` }));
+  const grid = h("div", { style: "display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px" });
+  data.forEach((c, i) => {
+    const o = orig && orig[i];
+    const cell = (k, title, cls) => {
+      const ids = c[k];
+      const box = h("div", { cls: cls, style: "border-radius:6px; padding:8px; min-height:58px" }, [
+        h("div", { style: "font-size:11.5px; opacity:.9", text: title }),
+        h("div", { style: "font-size:22px; font-weight:650", text: String(ids.length) }),
+        h("div", { style: "font-size:11px; opacity:.9", text: ids.length && ids.length <= 3 ? ids.map(short).join(", ") : "" }),
+      ]);
+      box.title = ids.join(", ");
+      return box;
+    };
+    const m = h("div", { style: "display:grid; grid-template-columns:auto 1fr 1fr; gap:3px; font-size:12px; align-items:center" }, [
+      h("span"), h("span", { cls: "t-muted", style: "text-align:center; color:var(--muted)", text: yPos }), h("span", { style: "text-align:center; color:var(--muted)", text: yNeg }),
+      h("span", { style: "color:var(--muted)", text: pPos }), cell("tp", "TP", "bg-s4"), cell("fp", "FP · lỗi giả", c.fp.length ? "bg-serious" : "bg-neutral"),
+      h("span", { style: "color:var(--muted)", text: pNeg }), cell("fn", "FN · bỏ sót", c.fn.length ? "bg-serious" : "bg-neutral"), cell("tn", "TN", "bg-s1"),
+    ]);
+    const f = v => v.toFixed(3);
+    grid.appendChild(h("div", {}, [
+      h("div", { style: "font-weight:600; font-size:13px; margin-bottom:6px", text: c.name }), m,
+      h("div", { style: "font-size:12.5px; margin-top:6px; color:var(--ink-2)", text: `Precision ${f(c.precision)} · Recall ${f(c.recall)} · F1 ${f(c.f1)}` }),
+      o && fixes.length ? h("div", { style: "font-size:11.5px; color:var(--muted)", text: `gốc: TP ${o.tp.length} · FP ${o.fp.length} · FN ${o.fn.length} · TN ${o.tn.length} · F1 ${f(o.f1)}` }) : h("span"),
+    ]));
+  });
+  wrap.appendChild(grid);
+  fig.appendChild(wrap);
+}
+
+/* ---------- 1c. compile_log status (part-to-whole) ---------- */
+function figLog() {
+  const trunc = DATA.samples.filter(x => x.log_truncated).map(x => short(x.id));
+  const link = DATA.samples.filter(x => x.compile === "link");
+  const { fig, body, tab } = shell("fig-log", "compile_log theo đề",
+    "Trạng thái build mà log cho thấy. Lỗi build gồm cả lỗi link (không có main).",
+    `Log bị cắt ở đúng 2000 ký tự: ${trunc.join(", ") || "không có"}. Lỗi link mà nhãn vẫn compilable = 1: ${link.filter(x => x.dims.compilable === 1).map(x => short(x.id)).join(", ") || "không có"}.`);
+  body.before(legend(Object.values(COMPILE).map(c => [swatch("bg-" + c.cls, c.glyph), c.label])));
+  const W = 520, L = 56, R = 8, barH = 22, gap = 22, H = 2 * (barH + gap);
+  const svg = s("svg", { width: "100%", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Tỷ lệ trạng thái compile_log theo đề" }, body);
+  const rows = [];
+  ["EX01", "EX02"].forEach((ex, r) => {
+    const xs = byExam(ex);
+    const counts = { ok: 0, warning: 0, fail: 0 };
+    xs.forEach(x => counts[x.compile === "error" || x.compile === "link" ? "fail" : x.compile]++);
+    rows.push([ex, counts.ok, counts.warning, counts.fail, xs.length]);
+    const y = r * (barH + gap) + 6;
+    s("text", { x: 0, y: y + barH / 2 + 4, cls: "t-ink", text: ex }, svg);
+    let x0 = L;
+    const span = W - L - R;
+    for (const k of ["ok", "warning", "fail"]) {
+      if (!counts[k]) continue;
+      const w = (span * counts[k]) / xs.length - 2;
+      const g = s("g", {}, svg);
+      s("rect", { x: x0, y, width: Math.max(w, 1), height: barH, rx: 4, cls: `f-${COMPILE[k].cls} hit` }, g);
+      if (w > 40) s("text", { x: x0 + w / 2, y: y + barH / 2 + 4, "text-anchor": "middle", cls: `i-${COMPILE[k].cls}`, text: `${COMPILE[k].glyph} ${counts[k]}` }, g);
+      bindTip(g, ex, [[`${counts[k]}/${xs.length}`, COMPILE[k].label]]);
+      x0 += w + 2;
+    }
+  });
+  table(tab, ["Đề", "Log rỗng", "Chỉ cảnh báo", "Lỗi build", "Tổng"], rows);
+}
+
+/* ---------- 1d. EX01 function completeness grid ---------- */
+function figEx01Fn() {
+  const xs = sortByTotal(byExam("EX01"));
+  const all4 = xs.filter(x => [1, 2, 3, 4].every(k => x.functions["prob" + k] === "defined")).length;
+  const withMain = xs.filter(x => x.functions.main === "defined").length;
+  const { body, tab } = shell("fig-ex01fn", "EX01: bài nộp có những hàm nào",
+    `Đề yêu cầu 4 hàm prob1–prob4 và xoá main trước khi nộp. Chỉ ${all4}/${xs.length} bài có đủ 4 hàm; ${withMain}/${xs.length} bài vẫn còn main mà không bị trừ điểm. Hàng xếp theo tổng điểm gold.`,
+    "Không chạy được EX01 vì bộ dữ liệu không kèm generals.csv; chấm EX01 phải dựa vào đọc code tĩnh hoặc LLM.");
+  const FN = { defined: ["f-s3", "i-s3", "✓", "Có thân hàm"], declared: ["f-s1", "i-s1", "d", "Chỉ khai báo"], missing: ["f-neutral", "i-neutral", "–", "Không có"] };
+  body.before(legend(Object.values(FN).map(([f, , g, l]) => [swatch(f.replace("f-", "bg-"), g), l])));
+  const cols = ["prob1", "prob2", "prob3", "prob4", "main"];
+  const cw = 46, ch = 22, L = 64, top = 22, totalW = 150;
+  const W = L + cols.length * cw + 16 + totalW, H = top + xs.length * (ch + 2) + 4;
+  const svg = s("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Lưới hàm có mặt trong bài EX01" }, body);
+  cols.forEach((c, j) => s("text", { x: L + j * cw + cw / 2, y: 14, "text-anchor": "middle", cls: "t-ink", text: c }, svg));
+  s("text", { x: L + cols.length * cw + 16, y: 14, cls: "t-ink", text: "tổng gold" }, svg);
+  xs.forEach((x, i) => {
+    const y = top + i * (ch + 2);
+    s("text", { x: 0, y: y + ch / 2 + 4, cls: "t-ink", text: short(x.id) + (x.dims.compilable === 0 ? "  CE" : "") }, svg);
+    cols.forEach((c, j) => {
+      const st = x.functions[c];
+      const [f, ink, glyph, label] = FN[st];
+      const g = s("g", {}, svg);
+      s("rect", { x: L + j * cw + 1, y, width: cw - 2, height: ch, rx: 4, cls: f + " hit" }, g);
+      s("text", { x: L + j * cw + cw / 2, y: y + ch / 2 + 4, "text-anchor": "middle", cls: ink, text: glyph }, g);
+      bindTip(g, `${x.id} · ${c}`, [[label, "trạng thái"], [x.total, "tổng gold"]]);
+    });
+    const bx = L + cols.length * cw + 16, bw = ((totalW - 30) * x.total) / 10;
+    if (bw > 0) s("rect", { x: bx, y: y + 5, width: bw, height: ch - 10, rx: 3, cls: "f-ex01" }, svg);
+    s("text", { x: bx + bw + 6, y: y + ch / 2 + 4, cls: "t-ink", text: x.total }, svg);
+  });
+  table(tab, ["Bài", ...cols, "compilable", "Tổng"], xs.map(x => [x.id, ...cols.map(c => FN[x.functions[c]][3]), x.dims.compilable, x.total]));
+}
+
+/* ---------- 1e. EX02 public test verdict grid ---------- */
+function figTests() {
+  const xs = sortByTotal(byExam("EX02"));
+  const inputs = (xs.find(x => x.tests && x.tests.length) || { tests: [] }).tests.map(t => t.input);
+  const c = DATA.ex02_corr;
+  const { body, tab } = shell("fig-tests", "EX02: kết quả 8 test công khai theo từng bài",
+    `Mỗi ô là một test (cột là input). ${c.expected_true}/${c.n_public} test có đáp án True, nên in hằng "True" đã đạt ${c.expected_true}/${c.n_public}. Hàng xếp theo tổng điểm gold; cột phải là số test đạt và điểm gold.`,
+    "test_report không ghi returncode hay stderr; output rỗng (∅) là chương trình chết trước khi in. Harness đã bỏ khoảng trắng ở output.");
+  body.before(legend(Object.values(VERDICT).map(v => [swatch("bg-" + v.cls, v.glyph), v.label])));
+  const cw = 38, ch = 22, L = 64, top = 22;
+  const extra = [["strict", 52], ["lenient", 58], ["io", 30], ["logic", 40], ["tổng", 40]];
+  const W = L + inputs.length * cw + 12 + extra.reduce((a, e) => a + e[1], 0), H = top + xs.length * (ch + 2) + 4;
+  const svg = s("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Lưới kết quả test công khai EX02" }, body);
+  inputs.forEach((inp, j) => s("text", { x: L + j * cw + cw / 2, y: 14, "text-anchor": "middle", cls: "t-ink", text: inp }, svg));
+  let ex0 = L + inputs.length * cw + 12;
+  extra.forEach(([name, w]) => { s("text", { x: ex0 + w / 2, y: 14, "text-anchor": "middle", cls: "t-ink", text: name }, svg); ex0 += w; });
+  xs.forEach((x, i) => {
+    const y = top + i * (ch + 2);
+    s("text", { x: 0, y: y + ch / 2 + 4, cls: "t-ink", text: short(x.id) }, svg);
+    if (!x.tests || !x.tests.length) {
+      const g = s("g", {}, svg);
+      s("rect", { x: L + 1, y, width: inputs.length * cw - 2, height: ch, rx: 4, cls: "f-neutral hit" }, g);
+      s("text", { x: L + 10, y: y + ch / 2 + 4, cls: "i-neutral", text: `test_report = [] · ${x.compile === "link" ? "lỗi link (file bị comment toàn bộ)" : "không biên dịch được"}` }, g);
+      bindTip(g, x.id, [["không có test", "test_report"], [x.total, "tổng gold"]]);
+    } else {
+      x.tests.forEach((t, j) => {
+        const v = VERDICT[t.verdict];
+        const g = s("g", {}, svg);
+        s("rect", { x: L + j * cw + 1, y, width: cw - 2, height: ch, rx: 4, cls: `f-${v.cls} hit` }, g);
+        s("text", { x: L + j * cw + cw / 2, y: y + ch / 2 + 4, "text-anchor": "middle", cls: `i-${v.cls}`, text: v.glyph }, g);
+        bindTip(g, `${x.id} · input ${t.input}`, [[v.label, "kết quả"], [t.expected, "đáp án"], [t.actual === "" ? "(rỗng)" : t.actual, "output"]]);
+      });
+    }
+    let cx = L + inputs.length * cw + 12;
+    const vals = [x.tests && x.tests.length ? x.strict_pass : "–", x.tests && x.tests.length ? x.lenient_pass : "–", x.dims.io_format, x.dims.logic, x.total];
+    extra.forEach(([, w], k) => { s("text", { x: cx + w / 2, y: y + ch / 2 + 4, "text-anchor": "middle", cls: k === 4 ? "t-ink" : "", text: vals[k] }, svg); cx += w; });
+  });
+  const noTest = xs.filter(x => !x.tests || !x.tests.length).map(x => short(x.id));
+  confusionBlock(body.parentNode, DATA.io_confusion, "io_format: tín hiệu từ test_report so với nhãn",
+    `Dương tính = io_format = 0 (sai định dạng I/O theo nhãn). Chỉ tính ${xs.length - noTest.length} bài EX02 có test thật (bỏ ${noTest.join(", ")}: test_report = []). FP: test báo lỗi nhưng nhãn io_format = 1; FN: nhãn io_format = 0 mà tín hiệu không bắt được.`,
+    ["tín hiệu báo lỗi", "tín hiệu không báo", "nhãn io = 0", "nhãn io = 1"], DATA.io_confusion_original, "io_format");
+  table(tab, ["Bài", ...inputs.map(i => "input " + i), "strict", "lenient", "io_format", "logic", "tổng"],
+    xs.map(x => [x.id, ...(x.tests && x.tests.length ? x.tests.map(t => VERDICT[t.verdict].label) : inputs.map(() => "không có test")),
+      x.tests && x.tests.length ? x.strict_pass : "", x.tests && x.tests.length ? x.lenient_pass : "", x.dims.io_format, x.dims.logic, x.total]));
+}
+
+/* ---------- 1f. EX02 total vs tests passed ---------- */
+function figCorr() {
+  const c = DATA.ex02_corr;
+  const xs = byExam("EX02").filter(x => x.tests && x.tests.length);
+  const { body, tab } = shell("fig-corr", "EX02: điểm gold theo số test đạt",
+    `Spearman với tổng điểm (n = ${c.n}): so khớp chính xác ρ = ${c.strict}; nới lỏng (bỏ dòng nhắc, không phân biệt hoa/thường) ρ = ${c.lenient}. Đường nối chỉ ra bài mà hai cách đếm khác nhau.`,
+    "Dạng nới lỏng được chọn sau khi đã xem dữ liệu, nên ρ nới lỏng là số lạc quan trên mẫu nhỏ.");
+  body.before(legend([[swatch("ring", "", ""), "so khớp chính xác"], [swatch("dot bg-ex02", ""), "nới lỏng"]]));
+  const W = 520, H = 310, L = 40, R = 24, T = 26, B = 34;
+  const X = v => L + ((W - L - R) * v) / 8, Y = v => T + ((H - T - B) * (10 - v)) / 10;
+  const svg = s("svg", { width: "100%", style: "max-width:600px", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Tổng điểm theo số test đạt" }, body);
+  for (let v = 0; v <= 10; v += 2) { s("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), cls: "gridline" }, svg); s("text", { x: L - 8, y: Y(v) + 4, "text-anchor": "end", text: v }, svg); }
+  for (let v = 0; v <= 8; v++) s("text", { x: X(v), y: H - B + 16, "text-anchor": "middle", text: v }, svg);
+  s("text", { x: W - R, y: H - 4, "text-anchor": "end", cls: "t-muted", text: "số test đạt / 8" }, svg);
+  s("text", { x: L - 8, y: 12, "text-anchor": "end", cls: "t-muted", text: "tổng" }, svg);
+  const groups = {}, seen = {};
+  xs.forEach(x => { const k = x.lenient_pass + ":" + x.total; groups[k] = (groups[k] || 0) + 1; });
+  const off = (px, py) => { const k = px + ":" + py; const i = seen[k] = (seen[k] || 0) + 1; return (i - 1 - (groups[k] - 1) / 2) * 9; };
+  xs.forEach(x => {
+    const ys = Y(x.total);
+    if (x.strict_pass !== x.lenient_pass) s("line", { x1: X(x.strict_pass), x2: X(x.lenient_pass), y1: ys, y2: ys, stroke: "var(--axis)", "stroke-width": 2 }, svg);
+  });
+  xs.forEach(x => {
+    const ys = Y(x.total);
+    const dl = off(x.lenient_pass, x.total);
+    const g = s("g", {}, svg);
+    s("circle", { cx: X(x.lenient_pass) + dl, cy: ys, r: 12, fill: "transparent", cls: "hit", "stroke-width": 0 }, g);
+    s("circle", { cx: X(x.lenient_pass) + dl, cy: ys, r: 5, cls: "f-ex02", stroke: "var(--surface)", "stroke-width": 2 }, g);
+    bindTip(g, x.id, [[x.total, "tổng gold"], [x.strict_pass, "test đạt (chính xác)"], [x.lenient_pass, "test đạt (nới lỏng)"], [x.dims.io_format, "io_format"]]);
+    if (x.strict_pass !== x.lenient_pass) {
+      s("circle", { cx: X(x.strict_pass), cy: ys, r: 5, cls: "f-surface st-ex02", "stroke-width": 2 }, svg);
+      s("text", { x: (X(x.strict_pass) + X(x.lenient_pass)) / 2, y: ys + 18, "text-anchor": "middle", cls: "t-ink", text: `${short(x.id)}: in dòng nhắc nhập` }, svg);
+    }
+  });
+  table(tab, ["Bài", "Tổng", "Đạt (chính xác)", "Đạt (nới lỏng)", "io_format"], sortByTotal(xs).map(x => [x.id, x.total, x.strict_pass, x.lenient_pass, x.dims.io_format]));
+}
+
+/* ---------- 2a. rubric fingerprint heatmap ---------- */
+function stepOf(v, max) { if (v <= 0) return "neutral"; return "s" + Math.max(1, Math.ceil((4 * v) / max)); }
+function figHeat() {
+  const { body, tab } = shell("fig-heat", "Vân tay rubric của từng bài",
+    "Mỗi hàng là một bài, mỗi ô là điểm một chiều (đậm hơn = gần điểm tối đa). Nhóm theo đề, xếp theo tổng.",
+    "EX02 chỉ có 6 vector khác nhau: edge_case luôn bằng logic/2 và code_quality luôn bằng 1. EX01: complexity = code_quality = [logic > 0].");
+  body.before(legend([[swatch("bg-neutral", "0"), "0 điểm"], [swatch("bg-s1", ""), "≤ ¼ tối đa"], [swatch("bg-s2", ""), "≤ ½"], [swatch("bg-s3", ""), "≤ ¾"], [swatch("bg-s4", ""), "tối đa"]]));
+  const dims = DATA.dims, cw = 52, ch = 20, L = 64, top = 34, gapGroup = 18, totalW = 160;
+  const groups = ["EX01", "EX02"].map(ex => ({ ex, xs: sortByTotal(byExam(ex)) }));
+  const nRows = groups.reduce((a, g) => a + g.xs.length, 0);
+  const W = L + dims.length * cw + 16 + totalW, H = top + nRows * (ch + 2) + gapGroup * 2 + 8;
+  const svg = s("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Bản đồ nhiệt điểm rubric theo bài" }, body);
+  dims.forEach((d, j) => {
+    s("text", { x: L + j * cw + cw / 2, y: 14, "text-anchor": "middle", cls: "t-ink", text: DIM_SHORT[d] }, svg);
+    s("text", { x: L + j * cw + cw / 2, y: 27, "text-anchor": "middle", cls: "t-muted", text: "0–" + DATA.dim_max[d] }, svg);
+  });
+  s("text", { x: L + dims.length * cw + 16, y: 14, cls: "t-ink", text: "tổng (0–10)" }, svg);
+  let y = top;
+  groups.forEach(({ ex, xs }) => {
+    s("text", { x: 0, y: y + 12, cls: "t-ink", text: ex + " · " + DATA.exams[ex].type }, svg);
+    y += gapGroup;
+    xs.forEach(x => {
+      s("text", { x: 0, y: y + ch / 2 + 4, text: short(x.id) }, svg);
+      dims.forEach((d, j) => {
+        const v = x.dims[d], st = stepOf(v, DATA.dim_max[d]);
+        const g = s("g", {}, svg);
+        s("rect", { x: L + j * cw + 1, y, width: cw - 2, height: ch, rx: 4, cls: `f-${st} hit` }, g);
+        s("text", { x: L + j * cw + cw / 2, y: y + ch / 2 + 4, "text-anchor": "middle", cls: `i-${st}`, text: v }, g);
+        bindTip(g, `${x.id} · ${d}`, [[`${v} / ${DATA.dim_max[d]}`, "điểm"], [x.total, "tổng"]]);
+      });
+      const bx = L + dims.length * cw + 16, bw = ((totalW - 30) * x.total) / 10;
+      if (bw > 0) s("rect", { x: bx, y: y + 4, width: bw, height: ch - 8, rx: 3, cls: `f-${ex.toLowerCase()}` }, svg);
+      s("text", { x: bx + bw + 6, y: y + ch / 2 + 4, cls: "t-ink", text: x.total }, svg);
+      y += ch + 2;
+    });
+  });
+  table(tab, ["Bài", "Đề", ...dims, "Tổng", "Nhãn T2"], groups.flatMap(g => g.xs).map(x => [x.id, x.exam, ...dims.map(d => x.dims[d]), x.total, x.labels.join(", ") || "[]"]));
+}
+
+/* ---------- 2b. per-dimension distribution, small multiples ---------- */
+function figDims() {
+  const { fig, body, tab } = shell("fig-dims", "Phân bố từng chiều theo đề",
+    "Số bài theo từng mức điểm. Cột trái là EX01, cột phải là EX02.");
+  body.before(legend([[swatch("bg-ex01", ""), "EX01"], [swatch("bg-ex02", ""), "EX02"]]));
+  body.classList.remove("scroll");
+  body.style.display = "grid";
+  body.style.gridTemplateColumns = "repeat(auto-fit, minmax(240px, 1fr))";
+  body.style.gap = "10px";
+  const rows = [];
+  const ymax = Math.max(byExam("EX01").length, byExam("EX02").length);
+  for (const d of DATA.dims) {
+    const max = DATA.dim_max[d], W = 260, H = 150, L = 26, B = 32, T = 22;
+    const svg = s("svg", { width: "100%", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `Phân bố ${d}` }, body);
+    s("text", { x: 0, y: 13, cls: "t-ink", text: `${d} (0–${max})` }, svg);
+    const Y = v => T + ((H - T - B) * (ymax - v)) / ymax;
+    [0, Math.ceil(ymax / 2), ymax].forEach(v => { s("line", { x1: L, x2: W - 4, y1: Y(v), y2: Y(v), cls: "gridline" }, svg); s("text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end", text: v }, svg); });
+    const band = (W - L - 8) / (max + 1), bw = Math.min(18, band / 2 - 3);
+    for (let v = 0; v <= max; v++) {
+      const cx = L + band * v + band / 2;
+      s("text", { x: cx, y: H - B + 16, "text-anchor": "middle", text: v }, svg);
+      const counts = ["EX01", "EX02"].map(ex => byExam(ex).filter(x => x.dims[d] === v).length);
+      rows.push([d, v, counts[0], counts[1]]);
+      ["EX01", "EX02"].forEach((ex, k) => {
+        const n = counts[k];
+        const x0 = k === 0 ? cx - bw - 1 : cx + 1;
+        const g = s("g", {}, svg);
+        s("rect", { x: x0 - 3, y: T, width: bw + 6, height: H - T - B, fill: "transparent", cls: "hit", "stroke-width": 0 }, g);
+        if (n > 0) {
+          const y0 = Y(n), hgt = Y(0) - y0;
+          s("path", { d: `M${x0},${Y(0)} V${y0 + 4} q0,-4 4,-4 h${bw - 8} q4,0 4,4 V${Y(0)} Z`, cls: `f-${ex.toLowerCase()}` }, g);
+          if (hgt > 0) s("text", { x: x0 + bw / 2, y: y0 - 4, "text-anchor": "middle", cls: "t-ink", text: n }, g);
+        }
+        bindTip(g, `${d} = ${v}`, [[n, `bài ${ex}`]]);
+      });
+    }
+    s("line", { x1: L, x2: W - 4, y1: Y(0), y2: Y(0), cls: "axisline" }, svg);
+  }
+  table(tab, ["Chiều", "Mức điểm", "EX01", "EX02"], rows);
+}
+
+/* ---------- 2c. total score histogram ---------- */
+function figTotal() {
+  const { body, tab } = shell("fig-total", "Phân bố tổng điểm",
+    "Hai đỉnh rõ: nhóm bài hỏng (0–3) và nhóm 7–10. EX02 chỉ dùng 6 mức tổng.");
+  body.before(legend([[swatch("bg-ex01", ""), "EX01"], [swatch("bg-ex02", ""), "EX02"]]));
+  const W = 520, H = 220, L = 28, R = 8, T = 16, B = 30;
+  const counts = [...Array(11).keys()].map(v => ["EX01", "EX02"].map(ex => byExam(ex).filter(x => x.total === v).length));
+  const ymax = Math.max(2, ...counts.flat());
+  const Y = v => T + ((H - T - B) * (ymax - v)) / ymax;
+  const band = (W - L - R) / 11, bw = Math.min(14, band / 2 - 3);
+  const svg = s("svg", { width: "100%", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Histogram tổng điểm theo đề" }, body);
+  for (let v = 0; v <= ymax; v += 2) { s("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), cls: "gridline" }, svg); s("text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end", text: v }, svg); }
+  counts.forEach((pair, v) => {
+    const cx = L + band * v + band / 2;
+    s("text", { x: cx, y: H - B + 16, "text-anchor": "middle", text: v }, svg);
+    pair.forEach((n, k) => {
+      const ex = k ? "EX02" : "EX01", x0 = k ? cx + 1 : cx - bw - 1;
+      const g = s("g", {}, svg);
+      s("rect", { x: x0 - 3, y: T, width: bw + 6, height: H - T - B, fill: "transparent", cls: "hit", "stroke-width": 0 }, g);
+      if (n) s("path", { d: `M${x0},${Y(0)} V${Y(n) + 4} q0,-4 4,-4 h${bw - 8} q4,0 4,4 V${Y(0)} Z`, cls: `f-${ex.toLowerCase()}` }, g);
+      bindTip(g, `tổng = ${v}`, [[n, `bài ${ex}`]]);
+    });
+  });
+  s("line", { x1: L, x2: W - R, y1: Y(0), y2: Y(0), cls: "axisline" }, svg);
+  table(tab, ["Tổng", "EX01", "EX02"], counts.map((p, v) => [v, p[0], p[1]]));
+}
+
+/* ---------- 2d. constraint checks ---------- */
+function figChecks() {
+  const { body, tab } = shell("fig-checks", "Ràng buộc quan sát được trên mẫu",
+    "Số bài thoả ràng buộc trên số bài thuộc phạm vi. Đây là sự thật trên 32 bài, cần kiểm lại trên tập đầy đủ.");
+  body.classList.remove("scroll");
+  const list = h("div", { cls: "checks" });
+  for (const c of DATA.checks) {
+    const ok = c.holds === c.n;
+    const badge = h("span", { cls: "badge " + (ok ? "bg-good" : "bg-warning"), text: ok ? "✓" : "!", "aria-label": ok ? "luôn đúng" : "có ngoại lệ" });
+    const meter = h("div", { cls: "meter" }, h("i", { style: `width:${pct(c.holds, c.n)}%` }));
+    list.appendChild(h("div", { cls: "check" }, [badge, h("div", {}, [h("div", { text: c.name }), h("div", { cls: "scope", text: c.scope }), meter]), h("strong", { text: `${c.holds}/${c.n}` })]));
+  }
+  body.appendChild(list);
+  const s214 = DATA.samples.find(x => x.compile === "link" && x.dims.compilable === 1);
+  if (s214) body.appendChild(h("p", { cls: "desc", text: `Ngoại lệ ở dòng cuối: ${s214.id} lỗi link vì cả file bị comment, nhưng gold vẫn compilable = 1 và tổng ${s214.total}/10.` }));
+  table(tab, ["Ràng buộc", "Phạm vi", "Thoả", "Tổng"], DATA.checks.map(c => [c.name, c.scope, c.holds, c.n]));
+}
+
+/* ---------- 2e. EX01 gold total vs written policy ---------- */
+function figPolicy() {
+  const xs = byExam("EX01").filter(x => x.p).sort((a, b) => (b.total - b.policy) - (a.total - a.policy) || b.total - a.total);
+  const viol = xs.filter(x => x.p[0] === "wrong" && x.dims.logic > 0);
+  const { body, tab } = shell("fig-policy", "EX01: điểm gold so với điểm theo quy định của đề",
+    `Quy định: trọng số P1–P4 là 1/4/2/3, P1 sai thì P2–P4 không chấm, lỗi biên dịch hoặc lặp vô hạn thì 0. ${viol.length} bài P1 sai vẫn có điểm logic (${viol.map(x => short(x.id)).join(", ")}).`,
+    "Trạng thái từng câu lấy từ báo cáo EDA §2.4 (đọc tay code và feedback, đã kiểm chứng độc lập). Feedback chỉ dùng cho phân tích này, không bao giờ làm input của T1/T2. exams.json ghi trọng số 2.5 mỗi câu, mâu thuẫn với statement.");
+  body.before(legend([[swatch("dot bg-ex01", ""), "tổng gold"], [h("span", { cls: "key ring", style: "border-color: var(--ex01)" }), "điểm theo quy định"], [swatch("bg-serious", "!"), "P1 sai nhưng vẫn có điểm logic"]]));
+  const W = 640, L = 200, R = 24, T = 26, rowH = 26, H = T + xs.length * rowH + 26;
+  const X = v => L + ((W - L - R) * v) / 10;
+  const svg = s("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "So sánh tổng gold và điểm theo quy định cho EX01" }, body);
+  for (let v = 0; v <= 10; v += 2) { s("line", { x1: X(v), x2: X(v), y1: T - 6, y2: H - 22, cls: "gridline" }, svg); s("text", { x: X(v), y: H - 6, "text-anchor": "middle", text: v }, svg); }
+  ["P1", "P2", "P3", "P4"].forEach((p, j) => s("text", { x: 70 + j * 30 + 13, y: 14, "text-anchor": "middle", cls: "t-ink", text: p }, svg));
+  xs.forEach((x, i) => {
+    const cy = T + i * rowH + rowH / 2;
+    const isViol = viol.includes(x);
+    s("text", { x: 0, y: cy + 4, cls: "t-ink", text: short(x.id) }, svg);
+    x.p.forEach((st, j) => {
+      const [glyph, label] = PSTATUS[st];
+      const g = s("g", {}, svg);
+      s("rect", { x: 70 + j * 30, y: cy - 10, width: 26, height: 20, rx: 4, cls: "f-neutral hit" }, g);
+      s("text", { x: 70 + j * 30 + 13, y: cy + 4, "text-anchor": "middle", cls: "i-neutral", text: glyph }, g);
+      bindTip(g, `${x.id} · P${j + 1}`, [[label, "trạng thái (đọc tay)"]]);
+    });
+    if (isViol) {
+      s("rect", { x: 44, y: cy - 8, width: 16, height: 16, rx: 8, cls: "f-serious" }, svg);
+      s("text", { x: 52, y: cy + 4, "text-anchor": "middle", cls: "i-serious", text: "!" }, svg);
+    }
+    if (x.total !== x.policy) s("line", { x1: X(x.policy), x2: X(x.total), y1: cy, y2: cy, stroke: "var(--axis)", "stroke-width": 2 }, svg);
+    s("circle", { cx: X(x.policy), cy, r: 5, cls: "f-surface st-ex01", "stroke-width": 2 }, svg);
+    const g = s("g", {}, svg);
+    s("circle", { cx: X(x.total), cy, r: 12, fill: "transparent", cls: "hit", "stroke-width": 0 }, g);
+    s("circle", { cx: X(x.total), cy, r: 5, cls: "f-ex01", stroke: "var(--surface)", "stroke-width": 2 }, g);
+    bindTip(g, x.id, [[x.total, "tổng gold"], [x.policy, "điểm theo quy định"], [x.total - x.policy, "chênh lệch"], [x.dims.logic, "logic gold"]]);
+  });
+  table(tab, ["Bài", "P1", "P2", "P3", "P4", "Tổng gold", "Theo quy định", "Chênh"], xs.map(x => [x.id, ...x.p.map(st => PSTATUS[st][1]), x.total, x.policy, x.total - x.policy]));
+}
+
+/* ---------- 3. implications ---------- */
+function cards() {
+  const c = DATA.ex02_corr;
+  const items = [
+    ["T1 thực chất là đoán mức logic", "EX02 chỉ có logic ∈ {0, 2, 4}, edge_case = logic/2, code_quality ≡ 1. Nên dự đoán mức logic rồi suy các chiều còn lại theo ràng buộc của từng đề, thay vì 6 bộ phân loại độc lập."],
+    ["Cổng biên dịch khác nhau theo đề", "EX01 cho 000000 khi không biên dịch được, EX02 vẫn cho code_quality = 1 (tổng 1). Hậu xử lý phải theo exam_type."],
+    ["io_format không đọc được từ test_report", "Bài in dòng nhắc nhập rớt hết test mà vẫn io_format = 1 (S211 được 10/10); bài thừa một dấu cách đạt 8/8 mà io_format = 0 (S205). Cần đọc stdout thô và code."],
+    [`Số test đạt chỉ tương quan vừa với điểm`, `ρ = ${c.strict} khi so khớp chính xác, ${c.lenient} khi nới lỏng (n = ${c.n}). Dùng tỷ lệ đạt nới lỏng làm feature, không ánh xạ thẳng sang điểm.`],
+    ["Chính sách tiên quyết EX01 chỉ nên là feature", "Gold không áp cổng P1 nhất quán (S108, S110, S112 có điểm cao dù P1 sai). Áp cứng theo đề sẽ làm lệch khỏi gold và tụt QWK; giữ làm feature và báo cáo như phát hiện dữ liệu."],
+    ["Có nhãn không suy được từ input", "S214 bị comment toàn bộ, không link được, mà gold 10/10. Gắn cờ khi train và đánh giá, đừng ép mô hình học."],
+  ];
+  const box = document.getElementById("cards");
+  for (const [t, p] of items) box.appendChild(h("div", { cls: "card" }, [h("h4", { text: t }), h("p", { text: p })]));
+  document.getElementById("foot").textContent =
+    `Nguồn: ${DATA.generated_from}. Dựng lại: .venv/bin/python viz/build_input_rubric_viz.py --data-root <thư mục dữ liệu>. Dữ liệu là bài làm thật đã ẩn danh của lớp học; trang này chỉ chứa số liệu tổng hợp và mã bài (sample_id), không chứa code hay feedback. Không đưa trang ra ngoài lớp.`;
+}
+
+/* ---------- theme toggle (stored per viewer, never required) ---------- */
+function themeToggle() {
+  const root = document.documentElement;
+  const apply = mode => {
+    if (mode === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", mode);
+    document.querySelectorAll("[data-theme-set]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.themeSet === mode)));
+  };
+  let saved = "auto";
+  try { saved = localStorage.getItem("eda-theme") || "auto"; } catch (e) { /* storage may be blocked */ }
+  apply(saved);
+  document.querySelectorAll("[data-theme-set]").forEach(b => b.addEventListener("click", () => {
+    apply(b.dataset.themeSet);
+    try { localStorage.setItem("eda-theme", b.dataset.themeSet); } catch (e) { /* ignore */ }
+  }));
+}
+
+themeToggle();
+header();
+figInputs(); figCode(); figLog(); figEx01Fn(); figTests(); figCorr();
+figHeat(); figDims(); figTotal(); figChecks(); figPolicy();
+cards();
+</script>
+</body>
+</html>

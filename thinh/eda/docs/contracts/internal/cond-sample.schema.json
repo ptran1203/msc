@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grader.invalid/contracts/internal/cond-sample.schema.json",
+  "title": "CondSample - T3 view",
+  "description": "Mirrors 03 §2.2 CondSample (frozen, extra=\"forbid\"). Carries the given labels and the requested level for T3 only (BR-22, BR-23). Its module must never be imported by t1/t2, directly or indirectly (import-linter checks modules, so CondSample lives in its own module, 06 §1.5, FR-SEC-01). It never carries gold feedback; t1_test_report is present only when t3.use_t1_test_report is enabled (default false, Q-14).",
+  "x-contract-version": "0.1.0",
+  "x-status": "internal",
+  "x-pydantic": "grader.ing.cond_views:CondSample (proposed module; 03 §2.2 places it in ing/views.py, see 06 §7.1)",
+  "type": "object",
+  "required": ["sample_id", "exam_id", "exam_type", "code", "compile_log", "taxonomy_error", "level"],
+  "additionalProperties": false,
+  "properties": {
+    "sample_id": { "type": "string", "minLength": 1 },
+    "exam_id": { "type": "string", "minLength": 1 },
+    "exam_type": { "enum": ["multi_problem", "single_problem"] },
+    "code": { "$ref": "#/$defs/CodeText" },
+    "compile_log": { "type": "string" },
+    "taxonomy_error": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/TaxonomyLabel" },
+      "uniqueItems": true,
+      "maxItems": 10,
+      "description": "Tuple in pydantic; [] is valid (FR-T3-08)."
+    },
+    "level": { "$ref": "#/$defs/Level" },
+    "t1_test_report": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/ReportedCase" },
+      "default": null,
+      "description": "Only when t3.use_t1_test_report = true (waiting for Q-14)."
+    }
+  },
+  "not": {
+    "anyOf": [
+      { "required": ["feedback"] },
+      { "required": ["target_feedback_level"] },
+      { "required": ["test_report"] },
+      { "required": ["labels"] },
+      { "required": ["output"] }
+    ]
+  },
+  "$defs": {
+    "TaxonomyLabel": {
+      "enum": [
+        "Lỗi biên dịch",
+        "Lỗi nhập/xuất",
+        "Lỗi logic",
+        "Lỗi vòng lặp",
+        "Lỗi mảng/chuỗi",
+        "Lỗi hàm",
+        "Lỗi edge case",
+        "Lỗi thuật toán",
+        "Lỗi hard-code",
+        "Lỗi style"
+      ]
+    },
+    "Level": {
+      "enum": [
+        "Level 1 - Gợi ý nhẹ",
+        "Level 2 - Chẩn đoán",
+        "Level 3 - Gợi ý sửa",
+        "Level 4 - Lời giải mẫu"
+      ]
+    },
+    "CodeText": {
+      "type": "object",
+      "required": ["text", "raw_sha1", "encoding", "had_bom", "n_lines"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string" },
+        "raw_sha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "encoding": { "type": "string", "minLength": 1 },
+        "had_bom": { "type": "boolean" },
+        "n_lines": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "ReportedCase": {
+      "type": "object",
+      "required": ["input", "expected", "actual", "passed"],
+      "additionalProperties": false,
+      "properties": {
+        "input": { "type": "string" },
+        "expected": { "type": "string" },
+        "actual": { "type": "string" },
+        "passed": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -1,0 +1,225 @@
+{
+ "schema_version": 1,
+ "diagram_type": "dataflow",
+ "meta": {
+  "title": "Pipeline chấm C++ cho leaderboard (T1 · T2 · T3)",
+  "quality_profile": "showcase",
+  "viewBox": [
+   1080,
+   580
+  ]
+ },
+ "stages": [
+  {
+   "label": "Đầu vào"
+  },
+  {
+   "label": "Tín hiệu tất định"
+  },
+  {
+   "label": "LLM chấm T1+T2"
+  },
+  {
+   "label": "Hậu xử lý + T3"
+  },
+  {
+   "label": "Kiểm tra + nộp"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "submission",
+   "type": "frontend",
+   "label": "Bài nộp",
+   "sublabel": "code, log, test",
+   "stage": 0,
+   "row": 0,
+   "tag": "JSON",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "exam",
+   "type": "database",
+   "label": "Đề + rubric",
+   "sublabel": "taxonomy 10 nhãn",
+   "stage": 0,
+   "row": 2,
+   "tag": "meta",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "signals",
+   "type": "backend",
+   "label": "Signal extractor",
+   "sublabel": "gcc · test · rubric EX02",
+   "stage": 1,
+   "row": 0,
+   "tag": "no LLM",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "retriever",
+   "type": "database",
+   "label": "Few-shot retriever",
+   "sublabel": "cùng đề, kNN embedding",
+   "stage": 1,
+   "row": 2,
+   "tag": "train set",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "grader",
+   "type": "cloud",
+   "label": "Grader LLM",
+   "sublabel": "rubric EX01 + nhãn",
+   "stage": 2,
+   "row": 0,
+   "tag": "prompt v2",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "feedback",
+   "type": "cloud",
+   "label": "Feedback LLM",
+   "sublabel": "T3 theo level L1–L4",
+   "stage": 3,
+   "row": 2,
+   "tag": "VI",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "calibrate",
+   "type": "security",
+   "label": "Gate + vote",
+   "sublabel": "luật đề, bầu nhãn ≥2/4",
+   "stage": 3,
+   "row": 0,
+   "tag": "QWK/F1",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "guard",
+   "type": "security",
+   "label": "Level guard",
+   "sublabel": "leak code, độ dài",
+   "stage": 4,
+   "row": 2,
+   "tag": "retry",
+   "width": 136,
+   "height": 72
+  },
+  {
+   "id": "predictions",
+   "type": "database",
+   "label": "predictions.jsonl",
+   "sublabel": "schema đã validate",
+   "stage": 4,
+   "row": 0,
+   "tag": "leaderboard",
+   "width": 136,
+   "height": 72
+  }
+ ],
+ "flows": [
+  {
+   "id": "f-sig",
+   "from": "submission",
+   "to": "signals",
+   "label": "code + log",
+   "variant": "emphasis"
+  },
+  {
+   "id": "f-ret",
+   "from": "exam",
+   "to": "retriever",
+   "label": "exam_id"
+  },
+  {
+   "id": "f-grade",
+   "from": "signals",
+   "to": "grader",
+   "label": "features",
+   "variant": "emphasis",
+   "route": "straight"
+  },
+  {
+   "id": "f-shots",
+   "from": "retriever",
+   "to": "grader",
+   "label": "k ví dụ",
+   "variant": "dashed"
+  },
+  {
+   "id": "f-cal",
+   "from": "grader",
+   "to": "calibrate",
+   "label": "điểm thô",
+   "variant": "emphasis"
+  },
+  {
+   "id": "f-fb",
+   "from": "calibrate",
+   "to": "feedback",
+   "label": "nhãn đã chốt",
+   "labelAt": [
+    745,
+    232
+   ]
+  },
+  {
+   "id": "f-out1",
+   "from": "calibrate",
+   "to": "predictions",
+   "label": "T1 + T2",
+   "variant": "emphasis"
+  },
+  {
+   "id": "f-guard",
+   "from": "feedback",
+   "to": "guard",
+   "label": "draft"
+  },
+  {
+   "id": "f-out2",
+   "from": "guard",
+   "to": "predictions",
+   "label": "T3"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "emerald",
+   "title": "Kết quả POC (32 mẫu, nhãn đã sửa)",
+   "items": [
+    "Hybrid: QWK 0.80 · MAE 1.19 · macro-F1 0.41",
+    "EX02 rubric lấy từ test + gate: QWK 0.95",
+    "EX01 chỉ có LLM đọc code: QWK 0.63, điểm yếu chính"
+   ]
+  },
+  {
+   "dot": "violet",
+   "title": "Dùng chung API và self-host",
+   "items": [
+    "Cùng prompt, JSON schema, gate, bầu nhãn",
+    "Đổi backend qua client OpenAI-compatible (vLLM)",
+    "Một eval harness: QWK, macro-F1, level compliance"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "Điểm yếu đã biết",
+   "items": [
+    "EX01 không có test_report: cần harness tự viết",
+    "Nhãn trùng nghĩa: logic / thuật toán / vòng lặp",
+    "32 mẫu, luật rút từ chính tập này: số lạc quan"
+   ]
+  }
+ ]
+}

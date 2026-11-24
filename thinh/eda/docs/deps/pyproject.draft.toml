@@ -1,0 +1,257 @@
+# DRAFT pyproject.toml for the grader repo. Not locked yet.
+# Source of every version/range: docs/07-libraries.md (verified Linux x86_64 resolve,
+# Python 3.12, 2026-10-04). Next steps: `uv lock` -> commit uv.lock -> `make smoke` (FR-REP-05).
+
+[build-system]
+# TODO: pin as "uv_build>=<uv minor>,<<next minor>" from the uv version recorded in env.json,
+#       before the first `uv lock` (an unpinned build backend breaks build reproducibility).
+requires = ["uv_build"]
+build-backend = "uv_build"
+
+[project]
+name = "grader"
+version = "0.1.0"
+description = "LLM pipeline for C++ submissions: rubric scoring, error taxonomy, level-controlled feedback."
+readme = "README.md"
+# Proposed change from spec 03 §1.4 ("==3.11.*"): 3.12 is the only minor with a verified
+# resolve of all groups (core+infer+train+api+dev). One minor only, for reproducibility.
+requires-python = "==3.12.*"
+classifiers = [
+  # Package indexes reject uploads carrying this classifier: the repo must stay private.
+  "Private :: Do Not Upload",
+  "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+  # Contracts, configuration, CLI.
+  "pydantic>=2.13,<3",
+  "pydantic-settings>=2.15,<3",
+  "typer>=0.27,<0.28",
+  "pyyaml>=6.0.3,<7",
+  "jinja2>=3.1.6,<4",
+  # Schema layer of the predictions validator runs in predict, predict-private and submit
+  # (docs/06 §5), so it must exist with --no-dev (clean machine, make reproduce).
+  "jsonschema>=4.26,<5",
+  # Outbound HTTP; only grader.sec.egress may import it (ruff banned-api below).
+  "httpx>=0.28.1,<0.29",
+  # numpy is held at 2.3.5 by the vllm stack on Linux; same range on macOS keeps parity.
+  "numpy>=2.3.5,<2.4",
+  "pandas>=3.0.6,<3.1",
+  "pyarrow>=25.0.1,<26",
+  "scipy>=1.18.1,<1.19",
+  "scikit-learn>=1.9.1,<1.10",
+  "lightgbm>=4.7,<5",
+  # C++ parsing: static evidence, guard syntax layer, grounding, augmentation.
+  "tree-sitter>=0.26,<0.27",
+  "tree-sitter-cpp>=0.23.4,<0.24",
+  # Tokenizer + chat template on CPU: cache keys use prompt_token_ids, so cache replay and
+  # evidence-card token counting must not need vllm/torch. Pinned exactly, same as infer.
+  "transformers==5.18.0",
+  # Download pinned revisions at `make setup`; runtime runs with HF_HUB_OFFLINE=1.
+  "huggingface-hub>=1.33,<2",
+  "rank-bm25>=0.2.2,<0.3",
+  "matplotlib>=3.11,<4",
+  # "rapidfuzz",  # TODO: spec 03 §3.5 (label fuzzy match) names it, but it is absent from the
+  #               # verified resolve. Pin after `uv lock`, or replace with difflib (team decision).
+]
+
+[project.optional-dependencies]
+# All GPU packages are Linux-only so the macOS dev env never resolves torch/vllm.
+infer = [
+  # MUST stay pinned: unpinned resolves fell back to vllm 0.5.0.post1 + torch 2.3.0.
+  "vllm==0.30.0; sys_platform == 'linux'",
+  # vllm 0.30.0 hard-pins torch 2.13.0; train uses the same torch (one shared env).
+  "torch==2.13.0; sys_platform == 'linux'",
+]
+train = [
+  "torch==2.13.0; sys_platform == 'linux'",
+  "peft>=0.21.2,<0.22; sys_platform == 'linux'",
+  "trl>=1.14.1,<1.15; sys_platform == 'linux'",
+  "accelerate>=1.15,<1.16; sys_platform == 'linux'",
+  "bitsandbytes>=0.50.2,<0.51; sys_platform == 'linux'",
+  # unsloth is deliberately absent: it requires torch<2.13 and transformers<=5.5.0.
+]
+# Optional REST layer (iv) of docs/06-api-contract.md §1.6, §8. Install only if the team keeps
+# that layer (docs/07 §7 #2, open question in docs/06 §7.2); the private pipeline never imports it.
+api = [
+  # Held at 0.136.x by the Linux lock (vllm stack); same range elsewhere keeps parity.
+  "fastapi>=0.136.3,<0.137",
+  "uvicorn>=0.54,<0.55",
+]
+# Commercial teacher APIs: install/use only after Q-06 allows it; calls go through sec/egress.
+teacher = [
+  "anthropic>=1.11,<2",
+  "openai>=3.24,<4",
+]
+
+[project.scripts]
+grader = "grader.cli:app"
+
+[dependency-groups]
+dev = [
+  "ruff>=0.16.10,<0.17",
+  "mypy>=2.4,<2.5",
+  "pytest>=9.1.1,<10",
+  "pytest-cov>=7.1,<8",
+  # MPL-2.0: dev-only, never installed in the app image (`uv sync --no-dev`).
+  "hypothesis>=6.168.3,<7",
+  "import-linter>=2.15,<3",
+  "pre-commit>=4.6.2,<5",
+  # Contract tests resolve relative $ref of openapi.yaml with referencing.Registry (docs/06 §6.2).
+  # TODO: bound to the locked minor after `uv lock` (transitive of jsonschema, version not recorded).
+  "referencing",
+  # Lints docs/contracts/openapi.yaml (docs/06 §6.2); drop if there is no HTTP layer.
+  "openapi-spec-validator>=0.9,<0.10",
+  # "schemathesis",  # TODO: REST fuzz test of docs/06 §6.2. Version, license and compatibility
+  #                  # with hypothesis 6.168.3 / jsonschema 4.26.0 unverified: uncomment, `uv lock`,
+  #                  # record the result in docs/07 §2.6, or drop the fuzz test.
+]
+# Candidates that must win an ablation before moving to core.
+experimental = [
+  "lizard>=1.24,<2",
+  "iterative-stratification>=0.1.9,<0.2",
+]
+
+[tool.uv]
+# Lock only for the two platforms the team uses.
+environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+# Fail the lock if a package has no wheel for the GPU box (needs a recent uv; verify).
+required-environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+default-groups = ["dev"]
+# No extra PyTorch index on purpose: the verified lock resolved torch 2.13.0 from PyPI,
+# which pulls CUDA 13 runtime wheels (driver must support CUDA 13).
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "N", "S", "DTZ", "T20", "PT", "TID"]
+ignore = ["E501"]  # the formatter owns line length
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"os.environ".msg = "Read configuration through grader.core.config.Settings only (PY-05)."
+"os.getenv".msg = "Read configuration through grader.core.config.Settings only (PY-05)."
+"httpx".msg = "Outbound HTTP goes through grader.sec.egress only (FR-SEC-04)."
+"requests".msg = "Outbound HTTP goes through grader.sec.egress only (FR-SEC-04)."
+"urllib.request".msg = "Outbound HTTP goes through grader.sec.egress only (FR-SEC-04)."
+"anthropic".msg = "Teacher calls go through grader.sec.egress only (FR-SEC-04, Q-06)."
+"openai".msg = "Teacher calls go through grader.sec.egress only (FR-SEC-04, Q-06)."
+"huggingface_hub.upload_file".msg = "Adapters and data are never published (SC-39)."
+"huggingface_hub.upload_folder".msg = "Adapters and data are never published (SC-39)."
+"huggingface_hub.create_repo".msg = "Adapters and data are never published (SC-39)."
+
+[tool.ruff.lint.per-file-ignores]
+"src/grader/core/config.py" = ["TID251"]
+"src/grader/sec/egress.py" = ["TID251"]
+# Records offline flags and CUDA env vars, and calls nvidia-smi / docker version for env.json (FR-REP-04).
+"src/grader/rep/envinfo.py" = ["TID251", "S603", "S607"]
+# Calls git (sha, dirty, tag) for the run manifest (FR-REP-04).
+"src/grader/rep/manifest.py" = ["S603", "S607"]
+# Runs the organiser format-check script, no network (FR-VAL-02).
+"src/grader/val/validator.py" = ["S603", "S607"]
+# The docker CLI call is the sandbox boundary itself.
+"src/grader/evd/sandbox.py" = ["S603", "S607"]
+"tests/**" = ["S101", "TID251"]
+
+# ---------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+packages = ["grader"]
+plugins = ["pydantic.mypy"]
+warn_unused_configs = true
+warn_redundant_casts = true
+check_untyped_defs = true
+# PY-13: public functions are typed everywhere.
+disallow_untyped_defs = true
+
+# Strict packages per spec 03 §1.6. `strict` is a global-only flag, so its parts are listed.
+[[tool.mypy.overrides]]
+module = ["grader.core.*", "grader.shared.*", "grader.val.*", "grader.evl.*", "grader.sec.*"]
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_subclassing_any = true
+warn_return_any = true
+warn_unused_ignores = true
+implicit_reexport = false
+strict_equality = true
+
+# Libraries without inline types. Replace with stub packages once their versions are verified.
+[[tool.mypy.overrides]]
+module = [
+  "yaml.*", "jsonschema.*", "pandas.*", "scipy.*", "sklearn.*", "lightgbm.*", "rank_bm25.*",
+  "tree_sitter_cpp.*", "vllm.*", "peft.*", "trl.*", "bitsandbytes.*", "lizard.*", "iterstrat.*",
+]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
+xfail_strict = true
+# Names must match docs/05-test-cases.md §1.5 exactly.
+markers = [
+  "unit: pure functions on synthetic data; LLM is a test double",
+  "fixture32: needs the 32-sample set via Settings.test.sample_root; skipped if absent",
+  "golden: reproduces EDA reference numbers",
+  "llm_cache: deterministic LLM cache replay",
+  "sandbox: needs Docker and the pinned gcc:13 sandbox image",
+  "gpu: needs one 24 GB GPU, pinned vLLM and model revision",
+  "e2e: full make pipelines",
+  "repro: byte-identical reruns and clean-machine replay",
+  "perf: time budgets",
+  "compliance: feedback firewall, lineage, test isolation",
+  "security: sandbox escape, egress",
+  "privacy: leakage through logs, docs, git",
+  "acceptance: evidence for C-xx constraints",
+  "ablation: ablation harness",
+  "touches_feedback: reads train feedback (T3/EVL flows only)",
+  "p0: blocks submission or release",
+  "p1: must pass before W7",
+  "p2: when time allows",
+  "smoke: pre-submission smoke subset",
+]
+
+[tool.coverage.run]
+source = ["grader"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+# NFR-MAINT-03 (>= 80%) targets core modules only; enforce per module in CI, not fail_under.
+
+# ---------------------------------------------------------------- import-linter
+# Spec 03 §1.5 lists a separate .importlinter file; keep the contracts in one place only.
+# import-linter checks modules, not classes: CondSample and GoldT3View must live in their own
+# modules for FR-SEC-01 (a) to be enforceable (proposed names below).
+# Indirect imports are forbidden too: sec.firewall must receive feedback shingles injected
+# from cli.py instead of importing the T3 gold view, otherwise t1 -> llm -> sec breaks this.
+[tool.importlinter]
+root_package = "grader"
+
+[[tool.importlinter.contracts]]
+name = "T1/T2 never reach T3 or feedback-bearing views (FR-SEC-01)"
+type = "forbidden"
+source_modules = ["grader.t1", "grader.t2"]
+forbidden_modules = ["grader.t3", "grader.ing.cond_views", "grader.ing.gold_t3"]
+
+[[tool.importlinter.contracts]]
+name = "Audit for T1/T2 constraints stays feedback-free (FR-EVL-10)"
+type = "forbidden"
+source_modules = ["grader.evl.audit"]
+forbidden_modules = ["grader.t3", "grader.ing.gold_t3", "grader.rpt.bonus"]
